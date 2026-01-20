@@ -39,7 +39,7 @@ python timer.py
 如果您希望製作成獨立的執行檔分享給朋友：
 
 ```Bash
-pyinstaller --onefile --noconsole --icon="timer.ico" --name="ppt_timer" ppt_timer.py
+pyinstaller --onefile --noconsole --icon="app_icon.ico" --name="ppt_timer" --version-file="version_info.txt" ppt_timer.py
 ```
 
 (請確保目錄下有名為 timer.ico 的圖示檔，否則請移除 --icon 參數)
