@@ -704,6 +704,12 @@ class AdvancedTimer:
         self.tooltip_label.bind("<Button-3>", self.show_context_menu)
         self.bind_hover_events()
         
+        # --- 補上這幾行 ---
+        self.profile_var.set(self.current_profile)
+        self.update_hint_display() # 初始化提示文字
+        self.update_timer()        # 啟動計時器核心迴圈 (最重要！)
+        # ------------------
+        
         self.root.after(500, self.register_hotkeys)
         
         self.root.mainloop()
