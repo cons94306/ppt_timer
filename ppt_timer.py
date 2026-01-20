@@ -1,5 +1,7 @@
+__version__ = "2.3.0"
+
 import tkinter as tk
-from tkinter import messagebox, simpledialog, colorchooser, filedialog
+from tkinter import messagebox, simpledialog, colorchooser, filedialog, font
 from tkinter import ttk
 import configparser
 import os
@@ -8,11 +10,12 @@ import ctypes
 import keyboard
 from screeninfo import get_monitors
 import threading
+import winreg
 
 CONFIG_FILE = "timer_config.ini"
 LANG_FILE = "language.ini"
 
-# --- 預設 Config 內容 (當 timer_config.ini 不存在時使用) ---
+# --- 預設 Config ---
 DEFAULT_CONFIG_CONTENT = """[Main]
 duration = 1200
 ahead = 60
@@ -24,6 +27,7 @@ height = 70
 margin = 24
 position = RT
 opacity = 230
+thememode = system
 backgroundcolor = #FFFFFF
 textcolor = #000000
 aheadcolor = #000000
@@ -55,7 +59,7 @@ lastmonitor = 0
 lastposition = TR
 """
 
-# --- 預設語言檔內容 ---
+# --- 預設語言檔 (更新頁籤名稱) ---
 DEFAULT_LANG_CONTENT = """[zh_TW]
 name = 繁體中文
 start = 開始
@@ -80,9 +84,10 @@ tab_general = 一般
 tab_appearance = 外觀
 tab_alert = 警示
 tab_hotkey = 快捷鍵
-tab_language = 語言
-lbl_lang_select = 選擇語言 (Select Language)
-lbl_lang_note = * 修改後請點擊儲存，介面將自動更新。
+tab_interface = 介面設定
+tab_about = 關於
+lbl_lang_select = 語言 (Language)
+lbl_lang_note = * 修改設定後請點擊儲存，介面將自動更新。
 lbl_profile_name = 設定檔名稱
 lbl_duration = 時間長度 (秒)
 lbl_width = 視窗寬度
@@ -91,8 +96,9 @@ lbl_opacity = 透明度 (0-255)
 lbl_margin = 邊緣距離
 lbl_fontsize = 字體大小
 lbl_fontface = 字體名稱
-lbl_fontweight = 字體粗細 (bold/normal)
-lbl_color_settings = --- 顏色設定 ---
+lbl_fontweight = 字體粗細
+lbl_theme_mode = 設定視窗主題
+lbl_color_settings = --- 計時器顏色設定 ---
 lbl_bg_color = 背景顏色
 lbl_text_color = 文字顏色
 lbl_ahead = 倒數前警告 (秒)
@@ -107,12 +113,21 @@ lbl_key_start = 開始計時
 lbl_key_pause = 暫停計時
 lbl_key_reset = 重置計時
 lbl_key_quit = 關閉程式
+lbl_version = 版本
+lbl_author = 開發者
+lbl_license = 授權
+theme_system = 💻 跟隨系統
+theme_dark = 🌙 深色模式
+theme_light = ☀ 淺色模式
+about_desc = 這是一個專為演講者、簡報者與直播主設計的輕量級、透明置頂倒數計時器
 btn_add = ➕ 新增
 btn_del = ➖ 刪除
 btn_save = 儲存全部並套用
 btn_cancel = 取消
 btn_pick_color = 選色
 editor_title = 設定編輯器
+about_title = 關於 PPT Timer
+about_msg = PPT Timer\\n版本: {}\\n\\n一個專為演講者設計的\\n輕量級、透明置頂倒數計時器。\\n\\nLicense: MIT
 
 [en_US]
 name = English
@@ -138,9 +153,10 @@ tab_general = General
 tab_appearance = Appearance
 tab_alert = Alerts
 tab_hotkey = Hotkeys
-tab_language = Language
-lbl_lang_select = Select Language
-lbl_lang_note = * Save to apply language changes.
+tab_interface = Interface
+tab_about = About
+lbl_lang_select = Language
+lbl_lang_note = * Save to apply changes.
 lbl_profile_name = Profile Name
 lbl_duration = Duration (sec)
 lbl_width = Width
@@ -150,7 +166,8 @@ lbl_margin = Margin
 lbl_fontsize = Font Size
 lbl_fontface = Font Family
 lbl_fontweight = Font Weight
-lbl_color_settings = --- Colors ---
+lbl_theme_mode = Editor Theme
+lbl_color_settings = --- Timer Colors ---
 lbl_bg_color = Background
 lbl_text_color = Text Color
 lbl_ahead = Warning Time (sec)
@@ -165,12 +182,20 @@ lbl_key_start = Start Key
 lbl_key_pause = Pause Key
 lbl_key_reset = Reset Key
 lbl_key_quit = Quit Key
-btn_add = ➕ Add
+lbl_version = Version
+lbl_author = Developer
+lbl_license = License
+theme_system = 💻 System Default
+theme_dark = 🌙 Dark Mode
+theme_light = ☀ Light Mode
+about_desc = A lightweight, always-on-top timer designed for presenters and streamers.
 btn_del = ➖ Del
 btn_save = Save & Apply
 btn_cancel = Cancel
 btn_pick_color = Pick
 editor_title = Settings Editor
+about_title = About PPT Timer
+about_msg = PPT Timer\\nVersion: {}\\n\\nA lightweight, always-on-top\\ntimer designed for presenters.\\n\\nLicense: MIT
 """
 
 class LanguageHelper:
@@ -188,8 +213,10 @@ class LanguageHelper:
         
         try:
             self.config.read(LANG_FILE, encoding="utf-8")
-        except:
-            self.config.read(LANG_FILE)
+        except configparser.ParsingError as e:
+            print(f"Language file parsing error: {e}")
+        except Exception as e:
+            print(f"Language load error: {e}")
 
     def set_language(self, lang_code):
         self.current_lang = lang_code
@@ -238,18 +265,88 @@ class SettingsEditor(tk.Toplevel):
         self.lang = lang_helper
         
         self.title(self.lang.get("editor_title"))
-        self.geometry("520x620")
+        self.geometry("520x650")
         
         self.ui_vars = {} 
+        self.theme_map = {
+            self.lang.get("theme_system"): "system",
+            self.lang.get("theme_dark"): "dark",
+            self.lang.get("theme_light"): "light"
+        }
         
+        self.determine_theme_colors()
+        
+        self.configure(bg=self.colors["bg"])
         self.attributes('-topmost', True)
         self.grab_set()
         
+        self.apply_title_bar_theme()
+
         self.setup_ui()
         self.load_section_to_ui(self.editing_section)
 
+    def determine_theme_colors(self):
+        mode = self.config.get("Main", "thememode", fallback="system")
+        self.is_dark = False
+
+        if mode == "system":
+            self.is_dark = (self.parent.get_system_theme() == "dark")
+        elif mode == "dark":
+            self.is_dark = True
+        else:
+            self.is_dark = False
+
+        if self.is_dark:
+            self.colors = {
+                "bg": "#2b2b2b",         
+                "fg": "#ffffff",         
+                "input_bg": "#3c3c3c",   
+                "input_fg": "#ffffff",   
+                "btn_bg": "#444444",     
+                "btn_fg": "#ffffff",     
+                "highlight": "#555555"   
+            }
+        else:
+            self.colors = {
+                "bg": "#f0f0f0",
+                "fg": "#000000",
+                "input_bg": "#ffffff",
+                "input_fg": "#000000",
+                "btn_bg": "#e1e1e1",
+                "btn_fg": "#000000",
+                "highlight": "#d0d0d0"
+            }
+
+    def apply_title_bar_theme(self):
+        try:
+            self.update_idletasks() 
+            DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+            set_window_attribute = ctypes.windll.dwmapi.DwmSetWindowAttribute
+            get_parent = ctypes.windll.user32.GetParent
+            hwnd = get_parent(self.winfo_id())
+            value = ctypes.c_int(1 if self.is_dark else 0)
+            set_window_attribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ctypes.byref(value), ctypes.sizeof(value))
+        except Exception as e:
+            pass
+
     def setup_ui(self):
-        top_frame = tk.Frame(self, bg="#dddddd", pady=5)
+        style = ttk.Style(self)
+        try:
+            style.theme_use('clam')
+        except: pass
+        
+        style.configure("TFrame", background=self.colors["bg"])
+        style.configure("TLabel", background=self.colors["bg"], foreground=self.colors["fg"])
+        style.configure("TNotebook", background=self.colors["bg"], borderwidth=0)
+        style.configure("TNotebook.Tab", 
+                        background=self.colors["btn_bg"], 
+                        foreground=self.colors["fg"], 
+                        padding=[10, 5])
+        style.map("TNotebook.Tab", 
+                  background=[("selected", self.colors["highlight"])],
+                  foreground=[("selected", self.colors["fg"])])
+
+        top_frame = tk.Frame(self, bg=self.colors["bg"], pady=5)
         top_frame.pack(fill='x')
 
         self.profile_combo = ttk.Combobox(top_frame, state="readonly", width=25)
@@ -258,8 +355,10 @@ class SettingsEditor(tk.Toplevel):
         
         self.refresh_profile_list()
 
-        tk.Button(top_frame, text=self.lang.get("btn_add"), command=self.add_profile, width=6).pack(side='left', padx=2)
-        tk.Button(top_frame, text=self.lang.get("btn_del"), command=self.delete_profile, width=6).pack(side='left', padx=2)
+        btn_opts = {"bg": self.colors["btn_bg"], "fg": self.colors["btn_fg"], "activebackground": self.colors["highlight"], "activeforeground": self.colors["btn_fg"], "relief": "flat"}
+
+        tk.Button(top_frame, text=self.lang.get("btn_add"), command=self.add_profile, width=6, **btn_opts).pack(side='left', padx=2)
+        tk.Button(top_frame, text=self.lang.get("btn_del"), command=self.delete_profile, width=6, **btn_opts).pack(side='left', padx=2)
 
         notebook = ttk.Notebook(self)
         notebook.pack(fill='both', expand=True, padx=10, pady=10)
@@ -268,13 +367,14 @@ class SettingsEditor(tk.Toplevel):
         self.create_appearance_tab(notebook)
         self.create_alert_tab(notebook)
         self.create_hotkey_tab(notebook)
-        self.create_language_tab(notebook)
+        self.create_interface_tab(notebook) # 改名後的方法
+        self.create_about_tab(notebook)
 
-        btn_frame = tk.Frame(self)
+        btn_frame = tk.Frame(self, bg=self.colors["bg"])
         btn_frame.pack(fill='x', padx=10, pady=10)
         
-        tk.Button(btn_frame, text=self.lang.get("btn_save"), command=self.save_and_close, bg="#4CAF50", fg="white", width=15).pack(side='right', padx=5)
-        tk.Button(btn_frame, text=self.lang.get("btn_cancel"), command=self.destroy, width=10).pack(side='right', padx=5)
+        tk.Button(btn_frame, text=self.lang.get("btn_save"), command=self.save_and_close, bg="#4CAF50", fg="white", width=15, relief="flat").pack(side='right', padx=5)
+        tk.Button(btn_frame, text=self.lang.get("btn_cancel"), command=self.destroy, width=10, **btn_opts).pack(side='right', padx=5)
 
     def refresh_profile_list(self):
         values = ["Main"]
@@ -367,6 +467,15 @@ class SettingsEditor(tk.Toplevel):
                 var.set(display)
                 continue
 
+            if key == "thememode":
+                val = self.config.get(section, key, fallback=None)
+                if val is None and section != "Main":
+                    val = self.config.get("Main", key, fallback="system")
+                if val is None: val = "system"
+                display = next((k for k, v in self.theme_map.items() if v == val), self.lang.get("theme_system"))
+                var.set(display)
+                continue
+
             val = self.config.get(section, key, fallback=None)
             if val is None and section != "Main":
                 val = self.config.get("Main", key, fallback="")
@@ -388,17 +497,20 @@ class SettingsEditor(tk.Toplevel):
                 langs = self.lang.get_available_languages()
                 code = next((code for code, name in langs if name == val), "zh_TW")
                 self.config.set("General", "language", code)
+            elif key == "thememode":
+                code = self.theme_map.get(val, "system")
+                self.config.set(section, key, code)
             else:
                 self.config.set(section, key, val)
 
     def add_entry(self, parent, row, label_text, key):
-        tk.Label(parent, text=label_text).grid(row=row, column=0, sticky='w', padx=10, pady=5)
+        tk.Label(parent, text=label_text, bg=self.colors["bg"], fg=self.colors["fg"]).grid(row=row, column=0, sticky='w', padx=10, pady=5)
         var = tk.StringVar()
         self.ui_vars[key] = var
-        tk.Entry(parent, textvariable=var, width=20).grid(row=row, column=1, padx=10, pady=5)
+        tk.Entry(parent, textvariable=var, width=20, bg=self.colors["input_bg"], fg=self.colors["input_fg"], insertbackground=self.colors["fg"]).grid(row=row, column=1, padx=10, pady=5)
 
     def add_scale(self, parent, row, label_text, key, min_val, max_val):
-        tk.Label(parent, text=label_text).grid(row=row, column=0, sticky='w', padx=10, pady=5)
+        tk.Label(parent, text=label_text, bg=self.colors["bg"], fg=self.colors["fg"]).grid(row=row, column=0, sticky='w', padx=10, pady=5)
         proxy_var = tk.IntVar()
         def on_scale_change(*args):
             self.ui_vars[key].set(str(proxy_var.get()))
@@ -408,22 +520,27 @@ class SettingsEditor(tk.Toplevel):
             try: proxy_var.set(int(float(self.ui_vars[key].get())))
             except: proxy_var.set(max_val)
         self.ui_vars[key].trace("w", on_str_change)
-        tk.Scale(parent, from_=min_val, to=max_val, orient='horizontal', variable=proxy_var).grid(row=row, column=1, sticky='ew', padx=10)
+        tk.Scale(parent, from_=min_val, to=max_val, orient='horizontal', variable=proxy_var, 
+                 bg=self.colors["bg"], fg=self.colors["fg"], highlightthickness=0).grid(row=row, column=1, sticky='ew', padx=10)
 
     def add_checkbox(self, parent, row, label_text, key):
         var = tk.StringVar()
         self.ui_vars[key] = var
-        tk.Checkbutton(parent, text=label_text, variable=var, onvalue="1", offvalue="0").grid(row=row, column=0, columnspan=2, sticky='w', padx=10, pady=2)
+        select_col = self.colors["input_bg"]
+        tk.Checkbutton(parent, text=label_text, variable=var, onvalue="1", offvalue="0", 
+                       bg=self.colors["bg"], fg=self.colors["fg"], selectcolor=select_col, activebackground=self.colors["bg"], activeforeground=self.colors["fg"]).grid(row=row, column=0, columnspan=2, sticky='w', padx=10, pady=2)
 
     def add_color_picker(self, parent, row, label_text, key):
-        tk.Label(parent, text=label_text).grid(row=row, column=0, sticky='w', padx=10, pady=5)
+        tk.Label(parent, text=label_text, bg=self.colors["bg"], fg=self.colors["fg"]).grid(row=row, column=0, sticky='w', padx=10, pady=5)
         var = tk.StringVar()
         self.ui_vars[key] = var
-        frame = tk.Frame(parent)
+        frame = tk.Frame(parent, bg=self.colors["bg"])
         frame.grid(row=row, column=1, sticky='w', padx=10)
-        entry = tk.Entry(frame, textvariable=var, width=10)
+        
+        entry = tk.Entry(frame, textvariable=var, width=10, bg=self.colors["input_bg"], fg=self.colors["input_fg"], insertbackground=self.colors["fg"])
         entry.pack(side='left')
-        btn = tk.Button(frame, text=self.lang.get("btn_pick_color"), width=5)
+        
+        btn = tk.Button(frame, text=self.lang.get("btn_pick_color"), width=5, bg=self.colors["btn_bg"], fg=self.colors["btn_fg"])
         def update_btn_color(*args):
             c = var.get()
             if not c.startswith("#") and len(c) == 6: c = "#" + c
@@ -439,20 +556,22 @@ class SettingsEditor(tk.Toplevel):
         btn.pack(side='left', padx=5)
 
     def add_file_picker(self, parent, row, label_text, key):
-        tk.Label(parent, text=label_text).grid(row=row, column=0, sticky='w', padx=10, pady=5)
+        tk.Label(parent, text=label_text, bg=self.colors["bg"], fg=self.colors["fg"]).grid(row=row, column=0, sticky='w', padx=10, pady=5)
         var = tk.StringVar()
         self.ui_vars[key] = var
-        frame = tk.Frame(parent)
+        frame = tk.Frame(parent, bg=self.colors["bg"])
         frame.grid(row=row, column=1, sticky='ew', padx=10)
-        entry = tk.Entry(frame, textvariable=var, width=15)
+        
+        entry = tk.Entry(frame, textvariable=var, width=15, bg=self.colors["input_bg"], fg=self.colors["input_fg"], insertbackground=self.colors["fg"])
         entry.pack(side='left', fill='x', expand=True)
+        
         def pick_file():
             filename = filedialog.askopenfilename(parent=self, filetypes=[("Audio Files", "*.mp3 *.wav *.mid")])
             if filename: var.set(filename)
-        tk.Button(frame, text="...", command=pick_file, width=3).pack(side='right')
+        tk.Button(frame, text="...", command=pick_file, width=3, bg=self.colors["btn_bg"], fg=self.colors["btn_fg"]).pack(side='right')
     
     def add_combo(self, parent, row, label_text, key, values):
-        tk.Label(parent, text=label_text).grid(row=row, column=0, sticky='w', padx=10, pady=5)
+        tk.Label(parent, text=label_text, bg=self.colors["bg"], fg=self.colors["fg"]).grid(row=row, column=0, sticky='w', padx=10, pady=5)
         var = tk.StringVar()
         self.ui_vars[key] = var
         cb = ttk.Combobox(parent, textvariable=var, values=values, state="readonly", width=18)
@@ -471,12 +590,18 @@ class SettingsEditor(tk.Toplevel):
     def create_appearance_tab(self, notebook):
         frame = ttk.Frame(notebook)
         notebook.add(frame, text=self.lang.get("tab_appearance"))
+        
         self.add_entry(frame, 0, self.lang.get("lbl_fontsize"), "fontsize")
-        self.add_entry(frame, 1, self.lang.get("lbl_fontface"), "fontface")
-        self.add_entry(frame, 2, self.lang.get("lbl_fontweight"), "fontweight")
-        tk.Label(frame, text=self.lang.get("lbl_color_settings")).grid(row=3, column=0, columnspan=3, pady=10)
-        self.add_color_picker(frame, 4, self.lang.get("lbl_bg_color"), "backgroundColor")
-        self.add_color_picker(frame, 5, self.lang.get("lbl_text_color"), "textcolor")
+        
+        all_fonts = sorted(font.families())
+        self.add_combo(frame, 1, self.lang.get("lbl_fontface"), "fontface", all_fonts)
+        self.add_combo(frame, 2, self.lang.get("lbl_fontweight"), "fontweight", ["bold", "normal"])
+        
+        ttk.Separator(frame, orient='horizontal').grid(row=3, column=0, columnspan=2, sticky="ew", pady=10)
+        tk.Label(frame, text=self.lang.get("lbl_color_settings"), bg=self.colors["bg"], fg=self.colors["fg"]).grid(row=4, column=0, columnspan=3, pady=5)
+        
+        self.add_color_picker(frame, 5, self.lang.get("lbl_bg_color"), "backgroundColor")
+        self.add_color_picker(frame, 6, self.lang.get("lbl_text_color"), "textcolor")
 
     def create_alert_tab(self, notebook):
         frame = ttk.Frame(notebook)
@@ -484,7 +609,7 @@ class SettingsEditor(tk.Toplevel):
         self.add_entry(frame, 0, self.lang.get("lbl_ahead"), "Ahead")
         self.add_color_picker(frame, 1, self.lang.get("lbl_ahead_color"), "AheadColor")
         self.add_color_picker(frame, 2, self.lang.get("lbl_timeout_color"), "timeoutColor")
-        tk.Label(frame, text=self.lang.get("lbl_sound_action")).grid(row=3, column=0, columnspan=3, pady=10)
+        tk.Label(frame, text=self.lang.get("lbl_sound_action"), bg=self.colors["bg"], fg=self.colors["fg"]).grid(row=3, column=0, columnspan=3, pady=10)
         self.add_checkbox(frame, 4, self.lang.get("lbl_play_warn"), "PlayWarningSound")
         self.add_file_picker(frame, 5, self.lang.get("lbl_warn_file"), "WarningSoundFile")
         self.add_checkbox(frame, 6, self.lang.get("lbl_play_finish"), "PlayFinishSound")
@@ -498,20 +623,40 @@ class SettingsEditor(tk.Toplevel):
         self.add_entry(frame, 2, self.lang.get("lbl_key_reset"), "resetKey")
         self.add_entry(frame, 3, self.lang.get("lbl_key_quit"), "quitKey")
 
-    def create_language_tab(self, notebook):
+    def create_interface_tab(self, notebook):
+        # 原本的 Language tab 改名為 Interface tab
         frame = ttk.Frame(notebook)
-        notebook.add(frame, text=self.lang.get("tab_language"))
+        notebook.add(frame, text=self.lang.get("tab_interface"))
+        
+        # 語言選擇
         langs = self.lang.get_available_languages()
         lang_names = [name for code, name in langs]
         self.add_combo(frame, 0, self.lang.get("lbl_lang_select"), "language", lang_names)
-        tk.Label(frame, text=self.lang.get("lbl_lang_note"), fg="gray").grid(row=1, column=0, columnspan=2, padx=10, pady=20)
+        
+        # 視窗主題 (從外觀移過來)
+        theme_names = list(self.theme_map.keys())
+        self.add_combo(frame, 1, self.lang.get("lbl_theme_mode"), "thememode", theme_names)
+        
+        tk.Label(frame, text=self.lang.get("lbl_lang_note"), fg="gray", bg=self.colors["bg"]).grid(row=2, column=0, columnspan=2, padx=10, pady=20)
+
+    def create_about_tab(self, notebook):
+        frame = ttk.Frame(notebook)
+        notebook.add(frame, text=self.lang.get("tab_about"))
+        
+        tk.Label(frame, text="PPT Timer", font=("Helvetica", 16, "bold"), pady=10, bg=self.colors["bg"], fg=self.colors["fg"]).pack()
+        tk.Label(frame, text=f"{self.lang.get('lbl_version')} {__version__}", font=("Helvetica", 10), bg=self.colors["bg"], fg=self.colors["fg"]).pack()
+        ttk.Separator(frame, orient='horizontal').pack(fill='x', padx=20, pady=10)
+        desc_text = self.lang.get("about_desc").replace("\\n", "\n")
+        tk.Label(frame, text=desc_text, justify="center", wraplength=400, bg=self.colors["bg"], fg=self.colors["fg"]).pack(pady=10)
+        tk.Label(frame, text="License: MIT", fg="gray", bg=self.colors["bg"]).pack(side="bottom", pady=20)
 
     def save_and_close(self):
         self.save_ui_to_virtual_config()
         try:
             with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
                 self.config.write(f)
-            messagebox.showinfo("OK", self.lang.get("saved_success"), parent=self)
+            # 移除確認彈窗，直接執行後續動作
+            # messagebox.showinfo("OK", self.lang.get("saved_success"), parent=self)
             self.parent.reload_config()
             self.destroy()
         except Exception as e:
@@ -558,10 +703,6 @@ class AdvancedTimer:
         self.hint_label.bind("<Button-3>", self.show_context_menu)
         self.tooltip_label.bind("<Button-3>", self.show_context_menu)
         self.bind_hover_events()
-        
-        self.profile_var.set(self.current_profile)
-        self.update_hint_display()
-        self.update_timer()
         
         self.root.after(500, self.register_hotkeys)
         
@@ -651,7 +792,8 @@ class AdvancedTimer:
                 'AheadColor': 'FCD34D', 'timeoutColor': 'EF4444',
                 'margin': 0, 'position': 'RT', 'Ahead': 60,
                 'PlayWarningSound': 0, 'PlayFinishSound': 0,
-                'stopResetsTimer': 0, 'sendOnTimeout': 0
+                'stopResetsTimer': 0, 'sendOnTimeout': 0,
+                'thememode': 'system'
             }
             val = defaults.get(key, 0)
 
@@ -662,15 +804,28 @@ class AdvancedTimer:
         except:
             return 0 if dtype == int else str(val)
 
+    def get_system_theme(self):
+        try:
+            registry = winreg.ConnectRegistry(None, winreg.HKEY_CURRENT_USER)
+            key = winreg.OpenKey(registry, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
+            value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
+            return "light" if value == 1 else "dark"
+        except Exception:
+            return "light"
+
     def apply_profile(self, profile_name):
         self.current_profile = profile_name
         self.custom_duration = None 
         
         raw_bg = self.get_conf("backgroundColor")
-        bg_color = "#" + raw_bg.replace("#", "") if raw_bg and raw_bg != "0" else "#1E1E1E"
-        raw_fg = self.get_conf("textcolor")
-        fg_color = "#" + raw_fg.replace("#", "") if raw_fg and raw_fg != "0" else "#E0E0E0"
+        bg_color = "#" + raw_bg.replace("#", "") if raw_bg and raw_bg != "0" else "#FFFFFF"
         
+        raw_fg = self.get_conf("textcolor")
+        fg_color = "#" + raw_fg.replace("#", "") if raw_fg and raw_fg != "0" else "#000000"
+        
+        self.current_bg = bg_color
+        self.current_fg = fg_color
+
         font_face = self.get_conf("fontface")
         font_size = self.get_conf("fontsize", dtype=int)
         font_weight = self.get_conf("fontweight")
@@ -872,8 +1027,7 @@ class AdvancedTimer:
         self.root.after(100, self.update_timer)
 
     def update_display_color(self, force_normal=False):
-        raw = self.get_conf("textcolor")
-        color = "#" + raw.replace("#", "") if raw and raw != "0" else "#E0E0E0"
+        color = self.current_fg if hasattr(self, 'current_fg') else "#E0E0E0"
         self.label.config(fg=color)
         if hasattr(self, 'hint_label'):
              self.hint_label.configure(fg=color)
@@ -992,7 +1146,6 @@ class AdvancedTimer:
         return "break"
 
     def create_default_ini(self):
-        # 修正：這裡應該寫入預設的 config 內容，避免空檔案錯誤
         default_config = """[Main]
 duration = 1200
 ahead = 60
@@ -1004,6 +1157,7 @@ height = 70
 margin = 24
 position = RT
 opacity = 230
+thememode = system
 backgroundcolor = #FFFFFF
 textcolor = #000000
 aheadcolor = #000000
