@@ -1,8 +1,9 @@
 # UTF-8
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(2, 4, 4, 0),
-    prodvers=(2, 4, 4, 0),
+    # filevers 和 prodvers 必須是 4 個整數的 tuple
+    filevers=(3, 6, 3, 0),
+    prodvers=(3, 6, 3, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -15,14 +16,14 @@ VSVersionInfo(
       [
       StringTable(
         u'040404b0',
-        [StringStruct(u'CompanyName', u''),
+        [StringStruct(u'CompanyName', u'YourName'),
         StringStruct(u'FileDescription', u'PPT Timer'),
-        StringStruct(u'FileVersion', u'2.4.4.0'),
+        StringStruct(u'FileVersion', u'3.6.3.0'),
         StringStruct(u'InternalName', u'ppt_timer'),
         StringStruct(u'LegalCopyright', u'Copyright (c) 2026'),
         StringStruct(u'OriginalFilename', u'ppt_timer.exe'),
         StringStruct(u'ProductName', u'PPT Timer'),
-        StringStruct(u'ProductVersion', u'2.4.4.0')])
+        StringStruct(u'ProductVersion', u'3.6.3.0')])
       ]), 
     VarFileInfo([VarStruct(u'Translation', [1028, 1200])])
   ]

@@ -1,4 +1,4 @@
-__version__ = "2.4.4"
+__version__ = "3.6.3"
 
 import tkinter as tk
 from tkinter import messagebox, simpledialog, colorchooser, filedialog, font
@@ -7,14 +7,37 @@ import configparser
 import os
 import time
 import ctypes
-import keyboard
-from screeninfo import get_monitors
 import threading
 import winreg
 import sys
 
+# --- 延遲載入外部套件以加快啟動速度 ---
 CONFIG_FILE = "timer_config.ini"
-LANG_FILE = "language.ini"
+
+# --- Windows API 常數 ---
+GWL_EXSTYLE = -20
+WS_EX_APPWINDOW = 0x00040000
+WS_EX_TOOLWINDOW = 0x00000080
+
+# --- 強制深色模式 API ---
+def force_dark_mode_support():
+    try:
+        ctypes.windll.uxtheme.SetPreferredAppMode(2) # 2 = Force Dark
+    except:
+        try:
+            ctypes.windll.uxtheme.AllowDarkModeForApp(True)
+        except:
+            pass
+
+force_dark_mode_support()
+
+# --- 資源路徑輔助函式 ---
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 # --- 預設 Config ---
 DEFAULT_CONFIG_CONTENT = """[Main]
@@ -38,14 +61,19 @@ playfinishsound = 0
 stopresetstimer = 0
 sendontimeout = 0
 showstatusindicator = 1
+showtaskbaricon = 0
 warningsoundfile = 
 finishsoundfile = 
+
+[General]
+language = zh_TW
 
 [shortcuts]
 startkey = F9
 pausekey = F10
 resetkey = F12
 quitkey = Ctrl+Shift+K
+togglekey = F7
 
 [Profile_1]
 name = 10分鐘
@@ -61,7 +89,7 @@ lastmonitor = 0
 lastposition = TR
 """
 
-# --- 預設語言檔 ---
+# --- 內建語言包 ---
 DEFAULT_LANG_CONTENT = """[zh_TW]
 name = 繁體中文
 start = 開始
@@ -72,10 +100,10 @@ settings = 設定...
 reload = 重新讀取設定
 quit = 離開
 position = 位置
-pos_tl = ↖ 左上 (TL)
-pos_tr = ↗ 右上 (TR)
-pos_bl = ↙ 左下 (BL)
-pos_br = ↘ 右下 (BR)
+pos_tl = ↖ 左上
+pos_tr = ↗ 右上
+pos_bl = ↙ 左下
+pos_br = ↘ 右下
 profile_main = Main (預設)
 input_profile_name = 請輸入設定檔名稱 (例如: 5分鐘演講):
 confirm_delete = 確定要刪除設定檔 [{}] 嗎？
@@ -101,6 +129,7 @@ lbl_fontface = 字體名稱
 lbl_fontweight = 字體粗細
 lbl_theme_mode = 設定視窗主題
 lbl_show_indicator = 顯示狀態指示燈 (►/∥/■)
+lbl_show_taskbar = 在工作列顯示圖示
 lbl_color_settings = --- 計時器顏色設定 ---
 lbl_bg_color = 背景顏色
 lbl_text_color = 文字顏色
@@ -116,6 +145,7 @@ lbl_key_start = 開始計時
 lbl_key_pause = 暫停計時
 lbl_key_reset = 重置計時
 lbl_key_quit = 關閉程式
+lbl_key_toggle = 顯示/隱藏視窗
 lbl_version = 版本
 lbl_author = 開發者
 lbl_license = 授權
@@ -130,12 +160,17 @@ ct_cancel = 取消
 about_desc = 這是一個專為演講者、簡報者與直播主設計的輕量級、透明置頂倒數計時器
 btn_add = ➕ 新增
 btn_del = ➖ 刪除
+btn_up = ↑ 上移
+btn_down = ↓ 下移
 btn_save = 儲存全部並套用
 btn_cancel = 取消
 btn_pick_color = 選色
 editor_title = 設定編輯器
 about_title = 關於 PPT Timer
 about_msg = PPT Timer\\n版本: {}\\n\\n一個專為演講者設計的\\n輕量級、透明置頂倒數計時器。\\n\\nLicense: MIT
+menu_profiles = 設定檔清單
+action_show = 顯示視窗
+action_hide = 隱藏視窗
 
 [en_US]
 name = English
@@ -147,10 +182,10 @@ settings = Settings...
 reload = Reload Config
 quit = Quit
 position = Position
-pos_tl = ↖ Top-Left (TL)
-pos_tr = ↗ Top-Right (TR)
-pos_bl = ↙ Bot-Left (BL)
-pos_br = ↘ Bot-Right (BR)
+pos_tl = ↖ Top-Left
+pos_tr = ↗ Top-Right
+pos_bl = ↙ Bot-Left
+pos_br = ↘ Bot-Right
 profile_main = Main (Default)
 input_profile_name = Enter Profile Name:
 confirm_delete = Delete profile [{}]?
@@ -176,6 +211,7 @@ lbl_fontface = Font Family
 lbl_fontweight = Font Weight
 lbl_theme_mode = Editor Theme
 lbl_show_indicator = Show Status Indicator (►/∥/■)
+lbl_show_taskbar = Show Icon in Taskbar
 lbl_color_settings = --- Timer Colors ---
 lbl_bg_color = Background
 lbl_text_color = Text Color
@@ -191,6 +227,7 @@ lbl_key_start = Start Key
 lbl_key_pause = Pause Key
 lbl_key_reset = Reset Key
 lbl_key_quit = Quit Key
+lbl_key_toggle = Show/Hide Key
 lbl_version = Version
 lbl_author = Developer
 lbl_license = License
@@ -204,12 +241,17 @@ ct_ok = OK
 ct_cancel = Cancel
 about_desc = A lightweight, always-on-top timer designed for presenters and streamers.
 btn_del = ➖ Del
+btn_up = ↑ Up
+btn_down = ↓ Down
 btn_save = Save & Apply
 btn_cancel = Cancel
 btn_pick_color = Pick
 editor_title = Settings Editor
 about_title = About PPT Timer
 about_msg = PPT Timer\\nVersion: {}\\n\\nA lightweight, always-on-top\\ntimer designed for presenters.\\n\\nLicense: MIT
+menu_profiles = Profiles
+action_show = Show Window
+action_hide = Hide Window
 
 [zh_CN]
 name = 简体中文
@@ -221,10 +263,10 @@ settings = 设置...
 reload = 重新读取设置
 quit = 退出
 position = 位置
-pos_tl = ↖ 左上 (TL)
-pos_tr = ↗ 右上 (TR)
-pos_bl = ↙ 左下 (BL)
-pos_br = ↘ 右下 (BR)
+pos_tl = ↖ 左上
+pos_tr = ↗ 右上
+pos_bl = ↙ 左下
+pos_br = ↘ 右下
 profile_main = Main (默认)
 input_profile_name = 请输入配置文件名称 (例如: 5分钟演讲):
 confirm_delete = 确定要删除配置文件 [{}] 吗？
@@ -250,6 +292,7 @@ lbl_fontface = 字体名称
 lbl_fontweight = 字体粗细
 lbl_theme_mode = 设置窗口主题
 lbl_show_indicator = 显示状态指示灯 (►/∥/■)
+lbl_show_taskbar = 在任务栏显示图标
 lbl_color_settings = --- 计时器颜色设置 ---
 lbl_bg_color = 背景颜色
 lbl_text_color = 文字颜色
@@ -265,6 +308,7 @@ lbl_key_start = 开始计时
 lbl_key_pause = 暂停计时
 lbl_key_reset = 重置计时
 lbl_key_quit = 关闭程序
+lbl_key_toggle = 显示/隐藏窗口
 lbl_version = 版本
 lbl_author = 开发者
 lbl_license = 授权
@@ -279,12 +323,17 @@ ct_cancel = 取消
 about_desc = 这是一个专为演讲者、演示者与主播设计的轻量级、透明置顶倒数计时器
 btn_add = ➕ 新增
 btn_del = ➖ 删除
+btn_up = ↑ 上移
+btn_down = ↓ 下移
 btn_save = 保存全部并应用
 btn_cancel = 取消
 btn_pick_color = 选色
 editor_title = 设置编辑器
 about_title = 关于 PPT Timer
 about_msg = PPT Timer\\n版本: {}\\n\\n一个专为演讲者设计的\\n轻量级、透明置顶倒数计时器。\\n\\nLicense: MIT
+menu_profiles = 配置文件
+action_show = 显示窗口
+action_hide = 隐藏窗口
 
 [ja_JP]
 name = 日本語
@@ -296,10 +345,10 @@ settings = 設定...
 reload = 設定を再読み込み
 quit = 終了
 position = 位置
-pos_tl = ↖ 左上 (TL)
-pos_tr = ↗ 右上 (TR)
-pos_bl = ↙ 左下 (BL)
-pos_br = ↘ 右下 (BR)
+pos_tl = ↖ 左上
+pos_tr = ↗ 右上
+pos_bl = ↙ 左下
+pos_br = ↘ 右下
 profile_main = Main (デフォルト)
 input_profile_name = プロファイル名を入力 (例: 5分スピーチ):
 confirm_delete = プロファイル [{}] を削除しますか？
@@ -325,6 +374,7 @@ lbl_fontface = フォント名
 lbl_fontweight = 太さ
 lbl_theme_mode = 設定画面のテーマ
 lbl_show_indicator = ステータスアイコンを表示 (►/∥/■)
+lbl_show_taskbar = タスクバーにアイコンを表示
 lbl_color_settings = --- タイマーの配色 ---
 lbl_bg_color = 背景色
 lbl_text_color = 文字色
@@ -340,6 +390,7 @@ lbl_key_start = 開始キー
 lbl_key_pause = 一時停止キー
 lbl_key_reset = リセットキー
 lbl_key_quit = 終了キー
+lbl_key_toggle = 表示/非表示キー
 lbl_version = バージョン
 lbl_author = 開発者
 lbl_license = ライセンス
@@ -354,12 +405,17 @@ ct_cancel = キャンセル
 about_desc = プレゼンターや配信者のために設計された、軽量で常に手前に表示されるタイマーです。
 btn_add = ➕ 追加
 btn_del = ➖ 削除
+btn_up = ↑ 上
+btn_down = ↓ 下
 btn_save = 保存して適用
 btn_cancel = キャンセル
 btn_pick_color = 色選択
 editor_title = 設定エディタ
 about_title = PPT Timer について
 about_msg = PPT Timer\\nバージョン: {}\\n\\nプレゼンター向けに設計された\\n軽量・透明・最前面表示のタイマーソフト。\\n\\nLicense: MIT
+menu_profiles = プロファイル
+action_show = ウィンドウを表示
+action_hide = ウィンドウを隠す
 
 [ko_KR]
 name = 한국어
@@ -371,10 +427,10 @@ settings = 설정...
 reload = 설정 다시 불러오기
 quit = 종료
 position = 위치
-pos_tl = ↖ 좌측 상단 (TL)
-pos_tr = ↗ 우측 상단 (TR)
-pos_bl = ↙ 좌측 하단 (BL)
-pos_br = ↘ 우측 하단 (BR)
+pos_tl = ↖ 좌측 상단
+pos_tr = ↗ 우측 상단
+pos_bl = ↙ 좌측 하단
+pos_br = ↘ 우측 하단
 profile_main = Main (기본)
 input_profile_name = 프로필 이름을 입력하세요 (예: 5분 발표):
 confirm_delete = 프로필 [{}] 을(를) 삭제하시겠습니까?
@@ -400,6 +456,7 @@ lbl_fontface = 글꼴 이름
 lbl_fontweight = 글꼴 굵기
 lbl_theme_mode = 설정창 테마
 lbl_show_indicator = 상태 아이콘 표시 (►/∥/■)
+lbl_show_taskbar = 작업 표시줄에 아이콘 표시
 lbl_color_settings = --- 타이머 색상 설정 ---
 lbl_bg_color = 배경 색상
 lbl_text_color = 텍스트 색상
@@ -415,6 +472,7 @@ lbl_key_start = 시작 키
 lbl_key_pause = 일시정지 키
 lbl_key_reset = 초기화 키
 lbl_key_quit = 종료 키
+lbl_key_toggle = 표시/숨기기 키
 lbl_version = 버전
 lbl_author = 개발자
 lbl_license = 라이선스
@@ -429,12 +487,17 @@ ct_cancel = 취소
 about_desc = 발표자 및 스트리머를 위해 설계된 가볍고 항상 위에 표시되는 타이머입니다.
 btn_add = ➕ 추가
 btn_del = ➖ 삭제
+btn_up = ↑ 위로
+btn_down = ↓ 아래로
 btn_save = 저장 및 적용
 btn_cancel = 취소
 btn_pick_color = 색상 선택
 editor_title = 설정 편집기
 about_title = PPT Timer 정보
 about_msg = PPT Timer\\n버전: {}\\n\\n발표자를 위해 설계된\\n가볍고 투명한 최상위 타이머입니다.\\n\\nLicense: MIT
+menu_profiles = 프로필
+action_show = 창 표시
+action_hide = 창 숨기기
 
 [ru_RU]
 name = Русский
@@ -446,10 +509,10 @@ settings = Настройки...
 reload = Перезагрузить
 quit = Выход
 position = Позиция
-pos_tl = ↖ Верх-Лев (TL)
-pos_tr = ↗ Верх-Прав (TR)
-pos_bl = ↙ Низ-Лев (BL)
-pos_br = ↘ Низ-Прав (BR)
+pos_tl = ↖ Верх-Лев
+pos_tr = ↗ Верх-Прав
+pos_bl = ↙ Низ-Лев
+pos_br = ↘ Низ-Прав
 profile_main = Main (По умолч.)
 input_profile_name = Введите имя профиля (напр.: 5 минут):
 confirm_delete = Удалить профиль [{}]?
@@ -475,6 +538,7 @@ lbl_fontface = Шрифт
 lbl_fontweight = Жирность
 lbl_theme_mode = Тема окна
 lbl_show_indicator = Индикатор статуса (►/∥/■)
+lbl_show_taskbar = Показать значок на панели задач
 lbl_color_settings = --- Цвета таймера ---
 lbl_bg_color = Фон
 lbl_text_color = Текст
@@ -490,6 +554,7 @@ lbl_key_start = Старт
 lbl_key_pause = Пауза
 lbl_key_reset = Сброс
 lbl_key_quit = Выход
+lbl_key_toggle = Показать/Скрыть
 lbl_version = Версия
 lbl_author = Автор
 lbl_license = Лицензия
@@ -504,12 +569,17 @@ ct_cancel = Отмена
 about_desc = Легкий таймер поверх всех окон для спикеров и стримеров.
 btn_add = ➕ Доб.
 btn_del = ➖ Удал.
+btn_up = ↑ Вверх
+btn_down = ↓ Вниз
 btn_save = Сохранить
 btn_cancel = Отмена
 btn_pick_color = Цвет
 editor_title = Редактор настроек
 about_title = О программе PPT Timer
 about_msg = PPT Timer\\nВерсия: {}\\n\\nЛегкий таймер поверх всех окон,\\nразработанный для презентаций.\\n\\nLicense: MIT
+menu_profiles = Профили
+action_show = Показать
+action_hide = Скрыть
 
 [es_ES]
 name = Español
@@ -521,10 +591,10 @@ settings = Configuración...
 reload = Recargar
 quit = Salir
 position = Posición
-pos_tl = ↖ Arriba-Izq (TL)
-pos_tr = ↗ Arriba-Der (TR)
-pos_bl = ↙ Abajo-Izq (BL)
-pos_br = ↘ Abajo-Der (BR)
+pos_tl = ↖ Arriba-Izq
+pos_tr = ↗ Arriba-Der
+pos_bl = ↙ Abajo-Izq
+pos_br = ↘ Abajo-Der
 profile_main = Main (Predet.)
 input_profile_name = Nombre del perfil (ej. Charla 5min):
 confirm_delete = ¿Eliminar perfil [{}]?
@@ -550,6 +620,7 @@ lbl_fontface = Fuente
 lbl_fontweight = Grosor
 lbl_theme_mode = Tema del Editor
 lbl_show_indicator = Indicador de estado (►/∥/■)
+lbl_show_taskbar = Mostrar icono en la barra de tareas
 lbl_color_settings = --- Colores del Temporizador ---
 lbl_bg_color = Fondo
 lbl_text_color = Color Texto
@@ -565,6 +636,7 @@ lbl_key_start = Tecla Inicio
 lbl_key_pause = Tecla Pausa
 lbl_key_reset = Tecla Reset
 lbl_key_quit = Tecla Salir
+lbl_key_toggle = Mostrar/Ocultar
 lbl_version = Versión
 lbl_author = Desarrollador
 lbl_license = Licencia
@@ -579,12 +651,17 @@ ct_cancel = Cancelar
 about_desc = Un temporizador ligero y siempre visible para presentadores.
 btn_add = ➕ Añadir
 btn_del = ➖ Borrar
+btn_up = ↑ Arriba
+btn_down = ↓ Abajo
 btn_save = Guardar
 btn_cancel = Cancelar
 btn_pick_color = Color
 editor_title = Editor de Configuración
 about_title = Acerca de PPT Timer
 about_msg = PPT Timer\\nVersión: {}\\n\\nUn temporizador ligero y siempre visible\\ndiseñado para presentadores.\\n\\nLicense: MIT
+menu_profiles = Perfiles
+action_show = Mostrar
+action_hide = Ocultar
 
 [fr_FR]
 name = Français
@@ -596,10 +673,10 @@ settings = Paramètres...
 reload = Recharger
 quit = Quitter
 position = Position
-pos_tl = ↖ Haut-Gauche (TL)
-pos_tr = ↗ Haut-Droite (TR)
-pos_bl = ↙ Bas-Gauche (BL)
-pos_br = ↘ Bas-Droite (BR)
+pos_tl = ↖ Haut-Gauche
+pos_tr = ↗ Haut-Droite
+pos_bl = ↙ Bas-Gauche
+pos_br = ↘ Bas-Droite
 profile_main = Main (Défaut)
 input_profile_name = Nom du profil (ex: Talk 5min):
 confirm_delete = Supprimer le profil [{}] ?
@@ -625,6 +702,7 @@ lbl_fontface = Police
 lbl_fontweight = Graisse
 lbl_theme_mode = Thème (Éditeur)
 lbl_show_indicator = Indicateur d'état (►/∥/■)
+lbl_show_taskbar = Afficher l'icône dans la barre des tâches
 lbl_color_settings = --- Couleurs du Timer ---
 lbl_bg_color = Arrière-plan
 lbl_text_color = Couleur du texte
@@ -640,6 +718,7 @@ lbl_key_start = Touche Début
 lbl_key_pause = Touche Pause
 lbl_key_reset = Touche Reset
 lbl_key_quit = Touche Quitter
+lbl_key_toggle = Afficher/Masquer
 lbl_version = Version
 lbl_author = Développeur
 lbl_license = Licence
@@ -654,12 +733,17 @@ ct_cancel = Annuler
 about_desc = Un minuteur léger, toujours au premier plan, pour présentateurs.
 btn_add = ➕ Ajouter
 btn_del = ➖ Suppr.
+btn_up = ↑ Haut
+btn_down = ↓ Bas
 btn_save = Enregistrer
 btn_cancel = Annuler
 btn_pick_color = Choisir
 editor_title = Éditeur de paramètres
 about_title = À propos de PPT Timer
 about_msg = PPT Timer\\nVersion : {}\\n\\nUn minuteur léger et toujours visible\\nconçu pour les présentateurs.\\n\\nLicense: MIT
+menu_profiles = Profils
+action_show = Afficher
+action_hide = Masquer
 
 [de_DE]
 name = Deutsch
@@ -671,10 +755,10 @@ settings = Einstellungen...
 reload = Neu laden
 quit = Beenden
 position = Position
-pos_tl = ↖ Oben-Links (TL)
-pos_tr = ↗ Oben-Rechts (TR)
-pos_bl = ↙ Unten-Links (BL)
-pos_br = ↘ Unten-Rechts (BR)
+pos_tl = ↖ Oben-Links
+pos_tr = ↗ Oben-Rechts
+pos_bl = ↙ Unten-Links
+pos_br = ↘ Unten-Rechts
 profile_main = Main (Standard)
 input_profile_name = Profilname (z.B. 5 Min Talk):
 confirm_delete = Profil [{}] löschen?
@@ -700,6 +784,7 @@ lbl_fontface = Schriftart
 lbl_fontweight = Schriftstärke
 lbl_theme_mode = Editor-Design
 lbl_show_indicator = Statusanzeige (►/∥/■)
+lbl_show_taskbar = Symbol in Taskleiste anzeigen
 lbl_color_settings = --- Timer-Farben ---
 lbl_bg_color = Hintergrund
 lbl_text_color = Textfarbe
@@ -715,6 +800,7 @@ lbl_key_start = Start-Taste
 lbl_key_pause = Pause-Taste
 lbl_key_reset = Reset-Taste
 lbl_key_quit = Beenden-Taste
+lbl_key_toggle = Anzeigen/Verbergen
 lbl_version = Version
 lbl_author = Entwickler
 lbl_license = Lizenz
@@ -729,12 +815,17 @@ ct_cancel = Abbrechen
 about_desc = Ein leichter "Always-on-Top" Timer für Präsentationen.
 btn_add = ➕ Neu
 btn_del = ➖ Löschen
+btn_up = ↑ Auf
+btn_down = ↓ Ab
 btn_save = Speichern
 btn_cancel = Abbrechen
 btn_pick_color = Farbe
 editor_title = Einstellungen
 about_title = Über PPT Timer
 about_msg = PPT Timer\\nVersion: {}\\n\\nEin leichter Timer für Präsentatoren,\\nder immer im Vordergrund bleibt.\\n\\nLicense: MIT
+menu_profiles = Profile
+action_show = Anzeigen
+action_hide = Verbergen
 """
 
 class LanguageHelper:
@@ -744,16 +835,8 @@ class LanguageHelper:
         self.load_languages()
 
     def load_languages(self):
-        if not os.path.exists(LANG_FILE):
-            try:
-                with open(LANG_FILE, "w", encoding="utf-8") as f:
-                    f.write(DEFAULT_LANG_CONTENT)
-            except: pass
-        
         try:
-            self.config.read(LANG_FILE, encoding="utf-8")
-        except configparser.ParsingError as e:
-            print(f"Language file parsing error: {e}")
+            self.config.read_string(DEFAULT_LANG_CONTENT)
         except Exception as e:
             print(f"Language load error: {e}")
 
@@ -779,13 +862,11 @@ class SoundPlayer:
         if not filepath:
             return
         
-        # 取得程式所在目錄
         if getattr(sys, 'frozen', False):
             base_dir = os.path.dirname(sys.executable)
         else:
             base_dir = os.path.dirname(os.path.abspath(__file__))
             
-        # 如果路徑不是絕對路徑，則加上程式目錄
         target_path = filepath
         if not os.path.isabs(filepath):
             target_path = os.path.join(base_dir, filepath)
@@ -904,7 +985,11 @@ class SettingsEditor(tk.Toplevel):
         self.load_section_to_ui(self.editing_section)
 
     def determine_theme_colors(self):
-        mode = self.config.get("Main", "thememode", fallback="system")
+        # 優先讀取 Config 中的設定，確保使用者切換模式後能即時反應
+        mode = self.config.get("General", "thememode", fallback=None)
+        if not mode:
+            mode = self.config.get("Main", "thememode", fallback="system")
+            
         self.is_dark = False
 
         if mode == "system":
@@ -916,13 +1001,13 @@ class SettingsEditor(tk.Toplevel):
 
         if self.is_dark:
             self.colors = {
-                "bg": "#2b2b2b",         
-                "fg": "#ffffff",         
-                "input_bg": "#3c3c3c",   
-                "input_fg": "#ffffff",   
-                "btn_bg": "#444444",     
-                "btn_fg": "#ffffff",     
-                "highlight": "#555555"   
+                "bg": "#2b2b2b",           
+                "fg": "#ffffff",           
+                "input_bg": "#3c3c3c",     
+                "input_fg": "#ffffff",     
+                "btn_bg": "#444444",       
+                "btn_fg": "#ffffff",       
+                "highlight": "#555555"     
             }
         else:
             self.colors = {
@@ -942,6 +1027,7 @@ class SettingsEditor(tk.Toplevel):
             set_window_attribute = ctypes.windll.dwmapi.DwmSetWindowAttribute
             get_parent = ctypes.windll.user32.GetParent
             hwnd = get_parent(self.winfo_id())
+            # 強制對 Toplevel 視窗應用 DWM 屬性
             value = ctypes.c_int(1 if self.is_dark else 0)
             set_window_attribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ctypes.byref(value), ctypes.sizeof(value))
         except Exception as e:
@@ -953,13 +1039,13 @@ class SettingsEditor(tk.Toplevel):
             style.theme_use('clam')
         except: pass
         
-        style.configure("TFrame", background=self.colors["bg"])
-        style.configure("TLabel", background=self.colors["bg"], foreground=self.colors["fg"])
+        # 配置 Notebook 樣式
         style.configure("TNotebook", background=self.colors["bg"], borderwidth=0)
         style.configure("TNotebook.Tab", 
                         background=self.colors["btn_bg"], 
                         foreground=self.colors["fg"], 
-                        padding=[10, 5])
+                        padding=[10, 5],
+                        borderwidth=0)
         style.map("TNotebook.Tab", 
                   background=[("selected", self.colors["highlight"])],
                   foreground=[("selected", self.colors["fg"])])
@@ -975,12 +1061,17 @@ class SettingsEditor(tk.Toplevel):
 
         btn_opts = {"bg": self.colors["btn_bg"], "fg": self.colors["btn_fg"], "activebackground": self.colors["highlight"], "activeforeground": self.colors["btn_fg"], "relief": "flat"}
 
-        tk.Button(top_frame, text=self.lang.get("btn_add"), command=self.add_profile, width=6, **btn_opts).pack(side='left', padx=2)
-        tk.Button(top_frame, text=self.lang.get("btn_del"), command=self.delete_profile, width=6, **btn_opts).pack(side='left', padx=2)
+        tk.Button(top_frame, text=self.lang.get("btn_add"), command=self.add_profile, width=6, **btn_opts).pack(side='left', padx=1)
+        tk.Button(top_frame, text=self.lang.get("btn_del"), command=self.delete_profile, width=6, **btn_opts).pack(side='left', padx=1)
+        
+        # [NEW] 上下移動按鈕 (寬度設為 6，並套用語言)
+        tk.Button(top_frame, text=self.lang.get("btn_up"), command=self.move_profile_up, width=6, **btn_opts).pack(side='left', padx=1)
+        tk.Button(top_frame, text=self.lang.get("btn_down"), command=self.move_profile_down, width=6, **btn_opts).pack(side='left', padx=1)
 
         notebook = ttk.Notebook(self)
         notebook.pack(fill='both', expand=True, padx=10, pady=10)
 
+        # 使用 tk.Frame 而非 ttk.Frame 以確保背景色正確應用
         self.create_general_tab(notebook)
         self.create_appearance_tab(notebook)
         self.create_alert_tab(notebook)
@@ -1016,6 +1107,9 @@ class SettingsEditor(tk.Toplevel):
         
         current_display = next((k for k, v in self.section_map.items() if v == self.editing_section), main_name)
         self.profile_combo.set(current_display)
+        
+        # [Fix] 強制更新 UI，確保 ComboBox 選項顯示正確
+        self.update_idletasks()
 
     def on_profile_change(self, event):
         display_name = self.profile_combo.get()
@@ -1056,6 +1150,9 @@ class SettingsEditor(tk.Toplevel):
         self.profile_combo.set(display_name)
         self.editing_section = new_section
         self.load_section_to_ui(new_section)
+        
+        # [Fix] 新增後同步更新主程式的托盤選單
+        self.parent.update_tray_menu()
 
     def delete_profile(self):
         if self.editing_section == "Main":
@@ -1070,10 +1167,80 @@ class SettingsEditor(tk.Toplevel):
         self.editing_section = "Main"
         self.refresh_profile_list()
         self.load_section_to_ui("Main")
+        
+        # [Fix] 刪除後同步更新主程式的托盤選單
+        self.parent.update_tray_menu()
+
+    # [NEW] 上移 Profile 邏輯
+    def move_profile_up(self):
+        current = self.editing_section
+        if current == "Main": return
+
+        profiles = [s for s in self.config.sections() if s.startswith("Profile_")]
+        profiles.sort(key=lambda x: int(x.split('_')[1]))
+
+        try:
+            idx = profiles.index(current)
+            if idx > 0:
+                prev_profile = profiles[idx-1]
+                self.swap_sections(current, prev_profile)
+                
+                # 交換後，內容互換，但我們想要保持編輯的是原本的「內容」
+                # 所以 editing_section 要指到上一個 section 名稱
+                self.editing_section = prev_profile
+                self.refresh_profile_list()
+                self.load_section_to_ui(self.editing_section)
+                
+                # [Fix] 交換後同步更新主程式的托盤選單
+                self.parent.update_tray_menu()
+        except ValueError:
+            pass
+
+    # [NEW] 下移 Profile 邏輯
+    def move_profile_down(self):
+        current = self.editing_section
+        if current == "Main": return
+
+        profiles = [s for s in self.config.sections() if s.startswith("Profile_")]
+        profiles.sort(key=lambda x: int(x.split('_')[1]))
+
+        try:
+            idx = profiles.index(current)
+            if idx < len(profiles) - 1:
+                next_profile = profiles[idx+1]
+                self.swap_sections(current, next_profile)
+                
+                self.editing_section = next_profile
+                self.refresh_profile_list()
+                self.load_section_to_ui(self.editing_section)
+                
+                # [Fix] 交換後同步更新主程式的托盤選單
+                self.parent.update_tray_menu()
+        except ValueError:
+            pass
+
+    # [NEW] 交換兩個 Section 的內容
+    def swap_sections(self, sec_a, sec_b):
+        # 先保存當前 UI 狀態到 config 物件
+        self.save_ui_to_virtual_config()
+        
+        # 取出資料
+        data_a = dict(self.config.items(sec_a))
+        data_b = dict(self.config.items(sec_b))
+
+        # 清空舊資料
+        self.config.remove_section(sec_a)
+        self.config.remove_section(sec_b)
+        self.config.add_section(sec_a)
+        self.config.add_section(sec_b)
+
+        # 交換寫入
+        for k, v in data_b.items(): self.config.set(sec_a, k, v)
+        for k, v in data_a.items(): self.config.set(sec_b, k, v)
 
     def load_section_to_ui(self, section):
         for key, var in self.ui_vars.items():
-            if key in ["startKey", "pauseKey", "resetKey", "quitKey"]:
+            if key in ["startKey", "pauseKey", "resetKey", "quitKey", "toggleKey"]:
                 val = self.config.get("shortcuts", key, fallback="")
                 var.set(val)
                 continue
@@ -1105,7 +1272,7 @@ class SettingsEditor(tk.Toplevel):
         section = self.editing_section
         for key, var in self.ui_vars.items():
             val = str(var.get())
-            if key in ["startKey", "pauseKey", "resetKey", "quitKey"]:
+            if key in ["startKey", "pauseKey", "resetKey", "quitKey", "toggleKey"]:
                 if not self.config.has_section("shortcuts"):
                     self.config.add_section("shortcuts")
                 self.config.set("shortcuts", key, val)
@@ -1117,7 +1284,11 @@ class SettingsEditor(tk.Toplevel):
                 self.config.set("General", "language", code)
             elif key == "thememode":
                 code = self.theme_map.get(val, "system")
+                # 如果是 Main，保存到 Main，否則保存到該 Profile
                 self.config.set(section, key, code)
+                # 同時更新 config 物件中的 General 設定，以便重載時生效
+                if not self.config.has_section("General"): self.config.add_section("General")
+                self.config.set("General", "thememode", code)
             else:
                 self.config.set(section, key, val)
 
@@ -1186,7 +1357,6 @@ class SettingsEditor(tk.Toplevel):
         def pick_file():
             filename = filedialog.askopenfilename(parent=self, filetypes=[("Audio Files", "*.mp3 *.wav *.mid")])
             if filename:
-                # 嘗試轉為相對路徑
                 try:
                     if getattr(sys, 'frozen', False):
                         base_dir = os.path.dirname(sys.executable)
@@ -1212,7 +1382,7 @@ class SettingsEditor(tk.Toplevel):
         cb.grid(row=row, column=1, padx=10, pady=5)
 
     def create_general_tab(self, notebook):
-        frame = ttk.Frame(notebook)
+        frame = tk.Frame(notebook, bg=self.colors["bg"])
         notebook.add(frame, text=self.lang.get("tab_general"))
         self.add_entry(frame, 1, self.lang.get("lbl_profile_name"), "name")
         self.add_entry(frame, 2, self.lang.get("lbl_duration"), "Duration")
@@ -1222,7 +1392,7 @@ class SettingsEditor(tk.Toplevel):
         self.add_entry(frame, 6, self.lang.get("lbl_margin"), "margin")
 
     def create_appearance_tab(self, notebook):
-        frame = ttk.Frame(notebook)
+        frame = tk.Frame(notebook, bg=self.colors["bg"])
         notebook.add(frame, text=self.lang.get("tab_appearance"))
         
         self.add_entry(frame, 0, self.lang.get("lbl_fontsize"), "fontsize")
@@ -1240,7 +1410,7 @@ class SettingsEditor(tk.Toplevel):
         self.add_color_picker(frame, 7, self.lang.get("lbl_text_color"), "textcolor")
 
     def create_alert_tab(self, notebook):
-        frame = ttk.Frame(notebook)
+        frame = tk.Frame(notebook, bg=self.colors["bg"])
         notebook.add(frame, text=self.lang.get("tab_alert"))
         self.add_entry(frame, 0, self.lang.get("lbl_ahead"), "Ahead")
         self.add_color_picker(frame, 1, self.lang.get("lbl_ahead_color"), "AheadColor")
@@ -1252,28 +1422,34 @@ class SettingsEditor(tk.Toplevel):
         self.add_file_picker(frame, 7, self.lang.get("lbl_finish_file"), "FinishSoundFile")
 
     def create_hotkey_tab(self, notebook):
-        frame = ttk.Frame(notebook)
+        frame = tk.Frame(notebook, bg=self.colors["bg"])
         notebook.add(frame, text=self.lang.get("tab_hotkey"))
         self.add_entry(frame, 0, self.lang.get("lbl_key_start"), "startKey")
         self.add_entry(frame, 1, self.lang.get("lbl_key_pause"), "pauseKey")
         self.add_entry(frame, 2, self.lang.get("lbl_key_reset"), "resetKey")
         self.add_entry(frame, 3, self.lang.get("lbl_key_quit"), "quitKey")
+        self.add_entry(frame, 4, self.lang.get("lbl_key_toggle"), "toggleKey")
 
     def create_interface_tab(self, notebook):
-        frame = ttk.Frame(notebook)
+        frame = tk.Frame(notebook, bg=self.colors["bg"])
         notebook.add(frame, text=self.lang.get("tab_interface"))
         
         langs = self.lang.get_available_languages()
+        # [NEW] 排序語言代碼 (a->z)
+        langs.sort(key=lambda x: x[0])
+        
         lang_names = [name for code, name in langs]
         self.add_combo(frame, 0, self.lang.get("lbl_lang_select"), "language", lang_names)
         
         theme_names = list(self.theme_map.keys())
         self.add_combo(frame, 1, self.lang.get("lbl_theme_mode"), "thememode", theme_names)
         
-        tk.Label(frame, text=self.lang.get("lbl_lang_note"), fg="gray", bg=self.colors["bg"]).grid(row=2, column=0, columnspan=2, padx=10, pady=20)
+        self.add_checkbox(frame, 2, self.lang.get("lbl_show_taskbar"), "showtaskbaricon")
+        
+        tk.Label(frame, text=self.lang.get("lbl_lang_note"), fg="gray", bg=self.colors["bg"]).grid(row=3, column=0, columnspan=2, padx=10, pady=20)
 
     def create_about_tab(self, notebook):
-        frame = ttk.Frame(notebook)
+        frame = tk.Frame(notebook, bg=self.colors["bg"])
         notebook.add(frame, text=self.lang.get("tab_about"))
         
         tk.Label(frame, text="PPT Timer", font=("Helvetica", 16, "bold"), pady=10, bg=self.colors["bg"], fg=self.colors["fg"]).pack()
@@ -1296,11 +1472,20 @@ class SettingsEditor(tk.Toplevel):
 class AdvancedTimer:
     def __init__(self):
         self.root = tk.Tk()
-        try:
-            if os.path.exists("icon.ico"):
-                self.root.iconbitmap("icon.ico")
-        except:
-            pass
+        # 解決閃爍問題：一開始先隱藏視窗
+        self.root.withdraw()
+        
+        # --- Icon 設定 ---
+        self.icon_path = resource_path("app_icon.ico")
+        self.has_icon = False
+        
+        if os.path.exists(self.icon_path):
+            try:
+                self.root.iconbitmap(self.icon_path)
+                self.has_icon = True
+            except:
+                pass
+            
         self.root.overrideredirect(True)
         self.root.attributes('-topmost', True)
 
@@ -1322,6 +1507,7 @@ class AdvancedTimer:
         self.last_fixed_position = None
         self.manual_x = 0
         self.manual_y = 0
+        self.is_hidden = False
 
         self.profile_var = tk.StringVar()
         self.position_var = tk.StringVar()
@@ -1340,15 +1526,213 @@ class AdvancedTimer:
         self.update_state_icon()
         self.update_timer()
         
-        self.root.after(500, self.register_hotkeys)
+        # [優化] 延遲載入後台任務 (Tray Icon / Keyboard Hooks)
+        self.root.after(200, self.initialize_background_tasks)
+        
+        # 初始化完成，顯示視窗 (除非本來就是隱藏狀態)
+        if not self.is_hidden:
+            self.root.deiconify()
+            self.apply_taskbar_icon_state()
         
         self.root.mainloop()
+
+    def initialize_background_tasks(self):
+        """背景任務延遲載入，避免卡住介面啟動"""
+        global pystray, Image, ImageDraw, keyboard, get_monitors
+        try:
+            import pystray
+            from PIL import Image, ImageDraw
+            import keyboard
+            from screeninfo import get_monitors
+        except ImportError:
+            print("Missing dependencies: pip install pystray pillow keyboard screeninfo")
+            return
+
+        self.register_hotkeys()
+        self.setup_tray_icon()
+
+    # --- 系統托盤相關功能 ---
+    def setup_tray_icon(self):
+        if self.has_icon:
+            try:
+                image = Image.open(self.icon_path)
+            except:
+                image = self.create_default_icon()
+        else:
+            image = self.create_default_icon()
+
+        menu = self.create_tray_menu()
+
+        self.tray_icon = pystray.Icon(
+            "PPT Timer", 
+            image, 
+            "PPT Timer", 
+            menu=menu
+        )
+        
+        self.tray_icon.run_detached = True
+        
+        threading.Thread(target=self.tray_icon.run, daemon=True).start()
+
+    def update_tray_menu(self):
+        """ 當設定改變時，手動刷新托盤選單 """
+        if hasattr(self, 'tray_icon'):
+            self.tray_icon.menu = self.create_tray_menu()
+
+    def create_default_icon(self):
+        width = 64
+        height = 64
+        color1 = (0, 0, 0)
+        color2 = (255, 255, 255)
+        image = Image.new('RGB', (width, height), color1)
+        dc = ImageDraw.Draw(image)
+        dc.rectangle((width // 4, height // 4, width * 3 // 4, height * 3 // 4), fill=color2)
+        return image
+
+    def safe_call(self, func, *args):
+        self.root.after(0, func, *args)
+
+    def create_tray_menu(self):
+        from pystray import MenuItem as Item, Menu
+        
+        s = "shortcuts"
+        start_key = self.config.get(s, "startKey", fallback="F9").upper()
+        pause_key = self.config.get(s, "pauseKey", fallback="F11").upper()
+        reset_key = self.config.get(s, "resetKey", fallback="F12").upper()
+        
+        def make_simple_action(func):
+            def action(icon, item): self.safe_call(func)
+            return action
+
+        def make_pos_action(code):
+            def action(icon, item): self.safe_call(self.set_position, code)
+            return action
+
+        def make_pos_checker(code):
+            def checker(item): return self.position_var.get() == code
+            return checker
+
+        def make_profile_action(section):
+            def action(icon, item): self.safe_call(self.change_profile, section)
+            return action
+
+        def make_profile_checker(section):
+            def checker(item): return self.profile_var.get() == section
+            return checker
+
+        def toggle_vis(icon, item):
+            self.safe_call(self.toggle_visibility)
+
+        def get_vis_label(item):
+            toggle_key = self.config.get("shortcuts", "togglekey", fallback="F7").upper()
+            if self.is_hidden:
+                base_label = self.lang_helper.get('action_show')
+            else:
+                base_label = self.lang_helper.get('action_hide')
+            return f"{base_label} ({toggle_key})"
+
+        control_items = [
+            Item(f"► {self.lang_helper.get('start')} ({start_key})", make_simple_action(self.start_timer)),
+            Item(f"∥ {self.lang_helper.get('pause')} ({pause_key})", make_simple_action(self.pause_timer)),
+            Item(f"↻ {self.lang_helper.get('reset')} ({reset_key})", make_simple_action(self.reset_timer))
+        ]
+
+        pos_items = []
+        positions = [
+            (self.lang_helper.get("pos_tl"), "TL"), 
+            (self.lang_helper.get("pos_tr"), "TR"), 
+            (self.lang_helper.get("pos_bl"), "BL"), 
+            (self.lang_helper.get("pos_br"), "BR")
+        ]
+        
+        for label, code in positions:
+            pos_items.append(Item(
+                label, 
+                action=make_pos_action(code),
+                checked=make_pos_checker(code),
+                radio=True
+            ))
+            
+        prof_items = []
+        prof_items.append(Item(
+            self.lang_helper.get('profile_main'), 
+            action=make_profile_action("Main"), 
+            checked=make_profile_checker("Main"), 
+            radio=True
+        ))
+        
+        # [Fix] 系統托盤選單也需要強制排序
+        profiles = [s for s in self.config.sections() if s.startswith("Profile_")]
+        profiles.sort(key=lambda x: int(x.split('_')[1]) if '_' in x else 0)
+        
+        for section in profiles:
+            name = self.config.get(section, "name", fallback=section)
+            prof_items.append(Item(
+                name, 
+                action=make_profile_action(section),
+                checked=make_profile_checker(section),
+                radio=True
+            ))
+
+        menu_items = [
+            Item(get_vis_label, toggle_vis, default=False), 
+            Menu.SEPARATOR, 
+        ] + control_items + [
+            Menu.SEPARATOR,
+            Item(self.lang_helper.get('position'), Menu(*pos_items)),
+            Item(self.lang_helper.get('custom_time'), make_simple_action(self.set_custom_time)),
+            Item(self.lang_helper.get('menu_profiles'), Menu(*prof_items)), 
+            Menu.SEPARATOR,
+            Item(self.lang_helper.get('settings'), make_simple_action(self.open_settings)),
+            Item(self.lang_helper.get('reload'), make_simple_action(self.reload_config)),
+            Menu.SEPARATOR,
+            Item(self.lang_helper.get('quit'), make_simple_action(self.quit_app))
+        ]
+
+        return Menu(*menu_items)
+
+    def apply_taskbar_icon_state(self):
+        try:
+            show_icon = self.get_conf("showtaskbaricon", dtype=bool)
+            hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
+            style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+            
+            if show_icon:
+                style = style & ~WS_EX_TOOLWINDOW
+                style = style | WS_EX_APPWINDOW
+            else:
+                style = style | WS_EX_TOOLWINDOW
+                style = style & ~WS_EX_APPWINDOW
+            
+            ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style)
+            ctypes.windll.user32.SetWindowPos(hwnd, 0, 0, 0, 0, 0, 0x27)
+        except:
+            pass
+
+    def toggle_visibility(self):
+        if self.is_hidden:
+            self.root.deiconify()
+            self.is_hidden = False
+            self.apply_taskbar_icon_state() 
+        else:
+            self.root.withdraw()
+            self.is_hidden = True
+        
+        self.update_tray_menu()
 
     def load_ini(self):
         if not os.path.exists(CONFIG_FILE):
             self.create_default_ini()
         self.read_config_file()
         
+        if not self.config.has_section("shortcuts"):
+            self.config.add_section("shortcuts")
+        if not self.config.has_option("shortcuts", "togglekey"):
+            self.config.set("shortcuts", "togglekey", "F7")
+            try:
+                with open(CONFIG_FILE, 'w', encoding='utf-8') as f: self.config.write(f)
+            except: pass
+
         lang_code = self.config.get("General", "language", fallback="zh_TW")
         self.lang_helper.set_language(lang_code)
 
@@ -1398,8 +1782,11 @@ class AdvancedTimer:
         self.read_config_file()
         
         self.lang_helper.load_languages()
+        
         lang_code = self.config.get("General", "language", fallback="zh_TW")
         self.lang_helper.set_language(lang_code)
+
+        self.update_tray_menu()
 
         target_profile = self.current_profile
         if not self.config.has_section(target_profile) and target_profile != "Main":
@@ -1429,7 +1816,8 @@ class AdvancedTimer:
                 'margin': 0, 'position': 'RT', 'Ahead': 60,
                 'PlayWarningSound': 0, 'PlayFinishSound': 0,
                 'stopResetsTimer': 0, 'sendOnTimeout': 0,
-                'thememode': 'system', 'showstatusindicator': 1
+                'thememode': 'system', 'showstatusindicator': 1,
+                'showtaskbaricon': 0
             }
             val = defaults.get(key, 0)
 
@@ -1449,7 +1837,6 @@ class AdvancedTimer:
         except Exception:
             return "light"
     
-    # 抽取顏色邏輯供自訂對話框使用
     def get_theme_colors(self):
         mode = self.get_conf("thememode")
         if not mode: mode = "system"
@@ -1501,14 +1888,19 @@ class AdvancedTimer:
         self.update_geometry()
         self.update_hint_display()
         self.update_state_icon()
+        self.apply_taskbar_icon_state()
 
     def update_geometry(self):
+        if self.is_hidden:
+            return
+
         w = self.get_conf("width", dtype=int)
         h = self.get_conf("height", dtype=int)
         if w == 0: w = 220
         if h == 0: h = 70
         
         try:
+            from screeninfo import get_monitors
             monitors = get_monitors()
             if not monitors: raise Exception
             if self.monitor_index >= len(monitors): self.monitor_index = 0
@@ -1553,10 +1945,16 @@ class AdvancedTimer:
         self.last_fixed_position = pos_code
         self.position_var.set(pos_code)
         self.save_status("lastPosition", pos_code)
+        
+        if self.is_hidden:
+            self.toggle_visibility()
         self.update_geometry()
+        self.update_tray_menu()
 
     def set_custom_time(self):
-        # 使用新的自訂時間對話框
+        if self.is_hidden: self.toggle_visibility()
+        self.root.lift()
+        
         dialog = CustomTimeDialog(self, self.get_theme_colors(), self.lang_helper)
         self.root.wait_window(dialog)
         
@@ -1565,6 +1963,9 @@ class AdvancedTimer:
             self.reset_timer()
 
     def open_settings(self):
+        if self.is_hidden: self.toggle_visibility()
+        self.root.lift()
+
         SettingsEditor(self, self.config, self.current_profile, self.lang_helper)
 
     def setup_ui(self):
@@ -1722,6 +2123,13 @@ class AdvancedTimer:
 
     def quit_app(self):
         SoundPlayer.stop()
+        
+        try:
+            if hasattr(self, 'tray_icon'):
+                self.tray_icon.stop()
+        except:
+            pass
+
         self.save_status("lastProfile", self.current_profile.replace("Profile_", "").replace("Main", "0"))
         try: self.root.destroy()
         except: pass
@@ -1746,6 +2154,9 @@ class AdvancedTimer:
                 keyboard.add_hotkey(self.config.get(s, "pauseKey"), lambda: safe_call(self.pause_timer))
                 keyboard.add_hotkey(self.config.get(s, "resetKey"), lambda: safe_call(self.reset_timer))
                 keyboard.add_hotkey(self.config.get(s, "quitKey"), lambda: safe_call(self.quit_app))
+                toggle_key = self.config.get(s, "togglekey", fallback="F7")
+                if toggle_key:
+                    keyboard.add_hotkey(toggle_key, lambda: safe_call(self.toggle_visibility))
         except Exception as e:
             print(f"Hotkey Error: {e}")
 
@@ -1754,50 +2165,58 @@ class AdvancedTimer:
         self.root.after(10, lambda: self._perform_profile_change(profile_name))
 
     def _perform_profile_change(self, profile_name):
-        self.root.withdraw()
+        was_hidden = self.is_hidden
+        if not was_hidden:
+            self.root.withdraw()
+            
         self.apply_profile(profile_name)
         self.reset_timer() 
         idx = profile_name.replace("Profile_", "").replace("Main", "0")
         self.save_status("lastProfile", idx)
-        self.root.deiconify()
+        
+        if not was_hidden:
+            self.root.deiconify()
+            self.apply_taskbar_icon_state()
+        
+        self.update_tray_menu()
         self.root.update_idletasks()
         self.root.update()
 
     def show_context_menu(self, event):
-        # 獲取主題顏色
         colors = self.get_theme_colors()
         
-        # 建立選單並設定顏色
         menu = tk.Menu(self.root, tearoff=0, 
                        bg=colors["bg"], 
                        fg=colors["fg"], 
                        activebackground=colors["highlight"], 
-                       activeforeground=colors["fg"],
+                       activeforeground=colors["fg"], 
                        relief="flat",
                        bd=1)
         
+        toggle_key = self.config.get("shortcuts", "togglekey", fallback="F7").upper()
+        label_vis = self.lang_helper.get('action_hide') if not self.is_hidden else self.lang_helper.get('action_show')
+        
+        menu.add_command(label=f"    {label_vis} ({toggle_key})", command=self.toggle_visibility)
+        menu.add_separator()
+
         s = "shortcuts"
         start_key = self.config.get(s, "startKey", fallback="F9").upper()
         pause_key = self.config.get(s, "pauseKey", fallback="F11").upper()
         reset_key = self.config.get(s, "resetKey", fallback="F12").upper()
         quit_key = self.config.get(s, "quitKey", fallback="Ctrl+Shift+K").upper()
 
-
-        # --- 功能區 ---
-        menu.add_command(label=f"►{self.lang_helper.get('start')} ({start_key})", command=self.start_timer)
-        menu.add_command(label=f"∥ {self.lang_helper.get('pause')} ({pause_key})", command=self.pause_timer)
-        menu.add_command(label=f"↻{self.lang_helper.get('reset')} ({reset_key})", command=self.reset_timer)
+        menu.add_command(label=f"► {self.lang_helper.get('start')} ({start_key})", command=self.start_timer)
+        menu.add_command(label=f"∥  {self.lang_helper.get('pause')} ({pause_key})", command=self.pause_timer)
+        menu.add_command(label=f"↻ {self.lang_helper.get('reset')} ({reset_key})", command=self.reset_timer)
         
         menu.add_separator()
 
-        # --- 位置子選單 ---
         pos_menu = tk.Menu(menu, tearoff=0, 
                            bg=colors["bg"], 
                            fg=colors["fg"], 
                            activebackground=colors["highlight"], 
-                           activeforeground=colors["fg"],
-                           relief="flat",
-                           bd=1)
+                           activeforeground=colors["fg"], 
+                           relief="flat", bd=1)
                            
         positions = [
             (self.lang_helper.get("pos_tl"), "TL"), 
@@ -1817,25 +2236,26 @@ class AdvancedTimer:
         menu.add_separator()
 
         menu.add_command(label=f"    {self.lang_helper.get('custom_time')}", command=self.set_custom_time)
-        # --- 設定檔區域 ---
+        
         current_prof = self.profile_var.get()
         
-        # Main 設定檔
         prefix = "∨ " if current_prof == "Main" else "    "
         menu.add_command(
             label=f"{prefix}{self.lang_helper.get('profile_main')}",
             command=lambda: self.change_profile("Main")
         )
 
-        # 其他設定檔
-        for section in self.config.sections():
-            if section.startswith("Profile_"):
-                name = self.config.get(section, "name", fallback=section)
-                prefix = "∨ " if current_prof == section else "    "
-                menu.add_command(
-                    label=f"{prefix}{name}",
-                    command=lambda s=section: self.change_profile(s)
-                )
+        # [Fix] 右鍵選單也需要強制排序
+        profiles = [s for s in self.config.sections() if s.startswith("Profile_")]
+        profiles.sort(key=lambda x: int(x.split('_')[1]) if '_' in x else 0)
+
+        for section in profiles:
+            name = self.config.get(section, "name", fallback=section)
+            prefix = "∨ " if current_prof == section else "    "
+            menu.add_command(
+                label=f"{prefix}{name}",
+                command=lambda s=section: self.change_profile(s)
+            )
         
         menu.add_separator()
         menu.add_command(label=f"    {self.lang_helper.get('settings')}", command=self.open_settings)
@@ -1847,52 +2267,9 @@ class AdvancedTimer:
         return "break"
 
     def create_default_ini(self):
-        default_config = """[Main]
-duration = 1200
-ahead = 60
-fontface = Calibri
-fontweight = bold
-fontsize = 54
-width = 240
-height = 70
-margin = 24
-position = RT
-opacity = 230
-thememode = system
-backgroundcolor = #FFFFFF
-textcolor = #000000
-aheadcolor = #000000
-timeoutcolor = #F87171
-playwarningsound = 0
-playfinishsound = 0
-stopresetstimer = 0
-sendontimeout = 0
-showstatusindicator = 1
-warningsoundfile = 
-finishsoundfile = 
-
-[shortcuts]
-startkey = F9
-pausekey = F10
-resetkey = F12
-quitkey = Ctrl+Shift+K
-
-[Profile_1]
-name = 10分鐘
-duration = 600
-
-[Profile_2]
-name = 5分鐘
-duration = 300
-
-[Status]
-lastprofile = 0
-lastmonitor = 0
-lastposition = TR
-"""
         try:
             with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
-                f.write(default_config)
+                f.write(DEFAULT_CONFIG_CONTENT)
         except: pass
 
 if __name__ == "__main__":
