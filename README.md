@@ -39,7 +39,7 @@ python timer.py
 如果您希望製作成獨立的執行檔分享給朋友：
 
 ```Bash
-pyinstaller --onefile --noconsole --icon="app_icon.ico" --name="ppt_timer" --version-file="version_info.txt" ppt_timer.py
+pyinstaller --noconsole --onefile --icon="app_icon.ico" --add-data "app_icon.ico;." --name="ppt_timer" --version-file="version_info.txt" ppt_timer.py
 ```
 
 (請確保目錄下有名為 timer.ico 的圖示檔，否則請移除 --icon 參數)
@@ -62,7 +62,8 @@ pyinstaller --onefile --noconsole --icon="app_icon.ico" --name="ppt_timer" --ver
 | 開始 (Start) | F9 | 開始倒數計時 |
 | 暫停 (Pause) | F10 | 暫停計時（再次按下不會恢復，需按開始） |
 | 重置 (Reset) | F12 | 重置回初始時間 |
-| 離開 (Quit) | Ctrl + Shift + K | 完全關閉程式 |
+| 隱藏/顯示 (Hide/Show) | F7 | 完全關閉程式 |
+| 離開 (Quit) | Ctrl + Shift + K | 隱藏/顯示計時器畫面 |
 
 > ⚙️ 快捷鍵可在設定選單中自定義
 
