@@ -1,4 +1,4 @@
-__version__ = "3.6.3"
+__version__ = "3.7.0"
 
 import tkinter as tk
 from tkinter import messagebox, simpledialog, colorchooser, filedialog, font
@@ -10,6 +10,7 @@ import ctypes
 import threading
 import winreg
 import sys
+import winsound
 
 # --- 延遲載入外部套件以加快啟動速度 ---
 CONFIG_FILE = "timer_config.ini"
@@ -51,7 +52,6 @@ height = 70
 margin = 24
 position = RT
 opacity = 230
-thememode = system
 backgroundcolor = #FFFFFF
 textcolor = #000000
 aheadcolor = #000000
@@ -67,6 +67,7 @@ finishsoundfile =
 
 [General]
 language = zh_TW
+thememode = system
 
 [shortcuts]
 startkey = F9
@@ -127,7 +128,7 @@ lbl_margin = 邊緣距離
 lbl_fontsize = 字體大小
 lbl_fontface = 字體名稱
 lbl_fontweight = 字體粗細
-lbl_theme_mode = 設定視窗主題
+lbl_theme_mode = 設定視窗主題 (全域)
 lbl_show_indicator = 顯示狀態指示燈 (►/∥/■)
 lbl_show_taskbar = 在工作列顯示圖示
 lbl_color_settings = --- 計時器顏色設定 ---
@@ -209,7 +210,7 @@ lbl_margin = Margin
 lbl_fontsize = Font Size
 lbl_fontface = Font Family
 lbl_fontweight = Font Weight
-lbl_theme_mode = Editor Theme
+lbl_theme_mode = Editor Theme (Global)
 lbl_show_indicator = Show Status Indicator (►/∥/■)
 lbl_show_taskbar = Show Icon in Taskbar
 lbl_color_settings = --- Timer Colors ---
@@ -290,7 +291,7 @@ lbl_margin = 边缘距离
 lbl_fontsize = 字体大小
 lbl_fontface = 字体名称
 lbl_fontweight = 字体粗细
-lbl_theme_mode = 设置窗口主题
+lbl_theme_mode = 设置窗口主题 (全局)
 lbl_show_indicator = 显示状态指示灯 (►/∥/■)
 lbl_show_taskbar = 在任务栏显示图标
 lbl_color_settings = --- 计时器颜色设置 ---
@@ -372,7 +373,7 @@ lbl_margin = マージン
 lbl_fontsize = フォントサイズ
 lbl_fontface = フォント名
 lbl_fontweight = 太さ
-lbl_theme_mode = 設定画面のテーマ
+lbl_theme_mode = 設定画面のテーマ (全体)
 lbl_show_indicator = ステータスアイコンを表示 (►/∥/■)
 lbl_show_taskbar = タスクバーにアイコンを表示
 lbl_color_settings = --- タイマーの配色 ---
@@ -454,7 +455,7 @@ lbl_margin = 여백
 lbl_fontsize = 글꼴 크기
 lbl_fontface = 글꼴 이름
 lbl_fontweight = 글꼴 굵기
-lbl_theme_mode = 설정창 테마
+lbl_theme_mode = 설정창 테마 (전역)
 lbl_show_indicator = 상태 아이콘 표시 (►/∥/■)
 lbl_show_taskbar = 작업 표시줄에 아이콘 표시
 lbl_color_settings = --- 타이머 색상 설정 ---
@@ -536,7 +537,7 @@ lbl_margin = Отступ
 lbl_fontsize = Размер шрифта
 lbl_fontface = Шрифт
 lbl_fontweight = Жирность
-lbl_theme_mode = Тема окна
+lbl_theme_mode = Тема окна (Глобальная)
 lbl_show_indicator = Индикатор статуса (►/∥/■)
 lbl_show_taskbar = Показать значок на панели задач
 lbl_color_settings = --- Цвета таймера ---
@@ -618,7 +619,7 @@ lbl_margin = Margen
 lbl_fontsize = Tamaño fuente
 lbl_fontface = Fuente
 lbl_fontweight = Grosor
-lbl_theme_mode = Tema del Editor
+lbl_theme_mode = Tema del Editor (Global)
 lbl_show_indicator = Indicador de estado (►/∥/■)
 lbl_show_taskbar = Mostrar icono en la barra de tareas
 lbl_color_settings = --- Colores del Temporizador ---
@@ -700,7 +701,7 @@ lbl_margin = Marge
 lbl_fontsize = Taille police
 lbl_fontface = Police
 lbl_fontweight = Graisse
-lbl_theme_mode = Thème (Éditeur)
+lbl_theme_mode = Thème (Éditeur Global)
 lbl_show_indicator = Indicateur d'état (►/∥/■)
 lbl_show_taskbar = Afficher l'icône dans la barre des tâches
 lbl_color_settings = --- Couleurs du Timer ---
@@ -782,7 +783,7 @@ lbl_margin = Randabstand
 lbl_fontsize = Schriftgröße
 lbl_fontface = Schriftart
 lbl_fontweight = Schriftstärke
-lbl_theme_mode = Editor-Design
+lbl_theme_mode = Editor-Design (Global)
 lbl_show_indicator = Statusanzeige (►/∥/■)
 lbl_show_taskbar = Symbol in Taskleiste anzeigen
 lbl_color_settings = --- Timer-Farben ---
@@ -857,37 +858,117 @@ class LanguageHelper:
         return langs
 
 class SoundPlayer:
-    @staticmethod
-    def play(filepath):
-        if not filepath:
-            return
+    loaded_files = {}
+
+    @classmethod  # <--- 務必確認這一行有加上！
+    def load_resource(cls, filepath, alias):
+        """ 預先載入音效檔案 (快取機制) """
+        if not filepath: return
         
+        # 如果已經載入過且路徑相同，就不重複載入
+        if cls.loaded_files.get(alias) == filepath:
+            return
+
         if getattr(sys, 'frozen', False):
             base_dir = os.path.dirname(sys.executable)
         else:
             base_dir = os.path.dirname(os.path.abspath(__file__))
-            
+        
         target_path = filepath
         if not os.path.isabs(filepath):
             target_path = os.path.join(base_dir, filepath)
-            
-        if not os.path.exists(target_path):
-            return
-            
-        alias = "timer_sound"
-        try:
-            ctypes.windll.winmm.mciSendStringW(f"close {alias}", None, 0, 0)
-            cmd_open = f'open "{target_path}" type mpegvideo alias {alias}'
-            cmd_play = f'play {alias}'
-            ctypes.windll.winmm.mciSendStringW(cmd_open, None, 0, 0)
-            ctypes.windll.winmm.mciSendStringW(cmd_play, None, 0, 0)
-        except Exception as e:
-            print(f"Sound Error: {e}")
+        
+        if not os.path.exists(target_path): return
+
+        ext = os.path.splitext(target_path)[1].lower()
+        
+        if ext != ".wav":
+            # 非 WAV 檔才需要透過 MCI 預先 OPEN
+            # 使用背景執行緒執行 open 指令，避免 UI 卡頓
+            def _async_open():
+                try:
+                    ctypes.windll.winmm.mciSendStringW(f"close {alias}", None, 0, 0)
+                    cmd = f'open "{target_path}" type mpegvideo alias {alias}'
+                    ctypes.windll.winmm.mciSendStringW(cmd, None, 0, 0)
+                except: pass
+            threading.Thread(target=_async_open, daemon=True).start()
+        
+        # 更新快取紀錄
+        cls.loaded_files[alias] = filepath
+
+    @classmethod
+    def play_alias(cls, alias, filepath):
+        if not filepath: return
+
+        # 路徑處理
+        if getattr(sys, 'frozen', False):
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+        target_path = filepath
+        if not os.path.isabs(filepath):
+            target_path = os.path.join(base_dir, filepath)
+
+        ext = os.path.splitext(target_path)[1].lower()
+
+        if ext == ".wav":
+            # WAV: 使用 winsound (Async) - 這是最快的方法
+            try:
+                winsound.PlaySound(target_path, winsound.SND_FILENAME | winsound.SND_ASYNC)
+            except: pass
+        else:
+            # MP3/Others: 播放已 open 的 alias
+            cmd = f"play {alias} from 0"
+            ret = ctypes.windll.winmm.mciSendStringW(cmd, None, 0, 0)
+            if ret != 0:
+                # Fallback: 若預載失敗，直接播放
+                cls.load_resource(filepath, alias) 
+                def _fallback_play():
+                    try:
+                        ctypes.windll.winmm.mciSendStringW(f'open "{target_path}" type mpegvideo alias {alias}', None, 0, 0)
+                        ctypes.windll.winmm.mciSendStringW(f'play {alias} from 0', None, 0, 0)
+                    except: pass
+                threading.Thread(target=_fallback_play, daemon=True).start()
+
+    @classmethod
+    def warmup(cls, alias, filepath):
+        """ [NEW] 暖身機制：靜音播放 0.1 秒以喚醒音訊驅動 """
+        if not filepath: return
+        
+        # 處理路徑
+        if getattr(sys, 'frozen', False):
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+        target_path = filepath
+        if not os.path.isabs(filepath):
+            target_path = os.path.join(base_dir, filepath)
+        
+        if not os.path.exists(target_path): return
+
+
+
+        def _warmup_task():
+            try:
+                ctypes.windll.winmm.mciSendStringW(f"close {alias}", None, 0, 0)
+                ctypes.windll.winmm.mciSendStringW(f'open "{target_path}" type mpegvideo alias {alias}', None, 0, 0)
+                ctypes.windll.winmm.mciSendStringW(f"set {alias} audio all off", None, 0, 0)
+                ctypes.windll.winmm.mciSendStringW(f"play {alias}", None, 0, 0)
+                time.sleep(0.1) 
+                ctypes.windll.winmm.mciSendStringW(f"pause {alias}", None, 0, 0)
+                ctypes.windll.winmm.mciSendStringW(f"seek {alias} to start", None, 0, 0)
+                ctypes.windll.winmm.mciSendStringW(f"set {alias} audio all on", None, 0, 0)
+            except: pass
+        
+        threading.Thread(target=_warmup_task, daemon=True).start()
 
     @staticmethod
     def stop():
         try:
-            ctypes.windll.winmm.mciSendStringW("close timer_sound", None, 0, 0)
+            winsound.PlaySound(None, winsound.SND_ASYNC) 
+            ctypes.windll.winmm.mciSendStringW("stop timer_sound", None, 0, 0)
+            ctypes.windll.winmm.mciSendStringW("stop warn_sound", None, 0, 0)
+            ctypes.windll.winmm.mciSendStringW("stop finish_sound", None, 0, 0)
         except:
             pass
 
@@ -985,10 +1066,8 @@ class SettingsEditor(tk.Toplevel):
         self.load_section_to_ui(self.editing_section)
 
     def determine_theme_colors(self):
-        # 優先讀取 Config 中的設定，確保使用者切換模式後能即時反應
-        mode = self.config.get("General", "thememode", fallback=None)
-        if not mode:
-            mode = self.config.get("Main", "thememode", fallback="system")
+        # [Modified] 強制從 General 讀取全域設定
+        mode = self.config.get("General", "thememode", fallback="system")
             
         self.is_dark = False
 
@@ -1061,10 +1140,10 @@ class SettingsEditor(tk.Toplevel):
 
         btn_opts = {"bg": self.colors["btn_bg"], "fg": self.colors["btn_fg"], "activebackground": self.colors["highlight"], "activeforeground": self.colors["btn_fg"], "relief": "flat"}
 
+        # [Fix] 按鈕寬度統一設為 6
         tk.Button(top_frame, text=self.lang.get("btn_add"), command=self.add_profile, width=6, **btn_opts).pack(side='left', padx=1)
         tk.Button(top_frame, text=self.lang.get("btn_del"), command=self.delete_profile, width=6, **btn_opts).pack(side='left', padx=1)
         
-        # [NEW] 上下移動按鈕 (寬度設為 6，並套用語言)
         tk.Button(top_frame, text=self.lang.get("btn_up"), command=self.move_profile_up, width=6, **btn_opts).pack(side='left', padx=1)
         tk.Button(top_frame, text=self.lang.get("btn_down"), command=self.move_profile_down, width=6, **btn_opts).pack(side='left', padx=1)
 
@@ -1108,7 +1187,6 @@ class SettingsEditor(tk.Toplevel):
         current_display = next((k for k, v in self.section_map.items() if v == self.editing_section), main_name)
         self.profile_combo.set(current_display)
         
-        # [Fix] 強制更新 UI，確保 ComboBox 選項顯示正確
         self.update_idletasks()
 
     def on_profile_change(self, event):
@@ -1151,7 +1229,6 @@ class SettingsEditor(tk.Toplevel):
         self.editing_section = new_section
         self.load_section_to_ui(new_section)
         
-        # [Fix] 新增後同步更新主程式的托盤選單
         self.parent.update_tray_menu()
 
     def delete_profile(self):
@@ -1168,10 +1245,8 @@ class SettingsEditor(tk.Toplevel):
         self.refresh_profile_list()
         self.load_section_to_ui("Main")
         
-        # [Fix] 刪除後同步更新主程式的托盤選單
         self.parent.update_tray_menu()
 
-    # [NEW] 上移 Profile 邏輯
     def move_profile_up(self):
         current = self.editing_section
         if current == "Main": return
@@ -1185,18 +1260,14 @@ class SettingsEditor(tk.Toplevel):
                 prev_profile = profiles[idx-1]
                 self.swap_sections(current, prev_profile)
                 
-                # 交換後，內容互換，但我們想要保持編輯的是原本的「內容」
-                # 所以 editing_section 要指到上一個 section 名稱
                 self.editing_section = prev_profile
                 self.refresh_profile_list()
                 self.load_section_to_ui(self.editing_section)
                 
-                # [Fix] 交換後同步更新主程式的托盤選單
                 self.parent.update_tray_menu()
         except ValueError:
             pass
 
-    # [NEW] 下移 Profile 邏輯
     def move_profile_down(self):
         current = self.editing_section
         if current == "Main": return
@@ -1214,27 +1285,21 @@ class SettingsEditor(tk.Toplevel):
                 self.refresh_profile_list()
                 self.load_section_to_ui(self.editing_section)
                 
-                # [Fix] 交換後同步更新主程式的托盤選單
                 self.parent.update_tray_menu()
         except ValueError:
             pass
 
-    # [NEW] 交換兩個 Section 的內容
     def swap_sections(self, sec_a, sec_b):
-        # 先保存當前 UI 狀態到 config 物件
         self.save_ui_to_virtual_config()
         
-        # 取出資料
         data_a = dict(self.config.items(sec_a))
         data_b = dict(self.config.items(sec_b))
 
-        # 清空舊資料
         self.config.remove_section(sec_a)
         self.config.remove_section(sec_b)
         self.config.add_section(sec_a)
         self.config.add_section(sec_b)
 
-        # 交換寫入
         for k, v in data_b.items(): self.config.set(sec_a, k, v)
         for k, v in data_a.items(): self.config.set(sec_b, k, v)
 
@@ -1253,10 +1318,8 @@ class SettingsEditor(tk.Toplevel):
                 continue
 
             if key == "thememode":
-                val = self.config.get(section, key, fallback=None)
-                if val is None and section != "Main":
-                    val = self.config.get("Main", key, fallback="system")
-                if val is None: val = "system"
+                # [Modified] 強制讀取全域設定
+                val = self.config.get("General", "thememode", fallback="system")
                 display = next((k for k, v in self.theme_map.items() if v == val), self.lang.get("theme_system"))
                 var.set(display)
                 continue
@@ -1284,9 +1347,7 @@ class SettingsEditor(tk.Toplevel):
                 self.config.set("General", "language", code)
             elif key == "thememode":
                 code = self.theme_map.get(val, "system")
-                # 如果是 Main，保存到 Main，否則保存到該 Profile
-                self.config.set(section, key, code)
-                # 同時更新 config 物件中的 General 設定，以便重載時生效
+                # [Modified] 寫入全域設定，不寫入 Profile
                 if not self.config.has_section("General"): self.config.add_section("General")
                 self.config.set("General", "thememode", code)
             else:
@@ -1599,6 +1660,8 @@ class AdvancedTimer:
         start_key = self.config.get(s, "startKey", fallback="F9").upper()
         pause_key = self.config.get(s, "pauseKey", fallback="F11").upper()
         reset_key = self.config.get(s, "resetKey", fallback="F12").upper()
+        quit_key = self.config.get(s, "quitKey", fallback="Ctrl+Shift+K").upper()
+
         
         def make_simple_action(func):
             def action(icon, item): self.safe_call(func)
@@ -1705,7 +1768,9 @@ class AdvancedTimer:
                 style = style & ~WS_EX_APPWINDOW
             
             ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style)
-            ctypes.windll.user32.SetWindowPos(hwnd, 0, 0, 0, 0, 0, 0x27)
+            # [Fixed] 強制觸發狀態更新
+            self.root.withdraw()
+            self.root.deiconify()
         except:
             pass
 
@@ -1838,7 +1903,8 @@ class AdvancedTimer:
             return "light"
     
     def get_theme_colors(self):
-        mode = self.get_conf("thememode")
+        # [Modified] 強制從 General 讀取全域設定
+        mode = self.get_conf("thememode", section="General")
         if not mode: mode = "system"
         is_dark = False
         if mode == "system":
@@ -1883,6 +1949,12 @@ class AdvancedTimer:
                 self.hint_label.configure(bg=bg_color, fg=fg_color, font=("Calibri", 10))
         except tk.TclError:
             pass
+
+        # [NEW] 預先載入音效，避免計時卡頓
+        if self.get_conf("PlayWarningSound", dtype=bool):
+            SoundPlayer.load_resource(self.get_conf("WarningSoundFile"), "warn_sound")
+        if self.get_conf("PlayFinishSound", dtype=bool):
+            SoundPlayer.load_resource(self.get_conf("FinishSoundFile"), "finish_sound")
 
         self.root.attributes('-alpha', opacity / 255.0)
         self.update_geometry()
@@ -2026,16 +2098,30 @@ class AdvancedTimer:
 
     def start_timer(self):
         if self.state == "RUNNING": return
+        
         if self.state == "STOPPED":
             self.start_timestamp = time.time()
             self.target_timestamp = self.start_timestamp + self.duration
+            
+            # [修正重點] 旗標重置只在「全新開始 (STOPPED)」時執行
+            # 這樣「暫停後繼續」時，會保留原本的 True/False 狀態，就不會重複響鈴
+            self.warning_triggered = False
+            self.finish_triggered = False
+            
+            # 暖身音效
+            if self.get_conf("PlayWarningSound", dtype=bool):
+                SoundPlayer.warmup("warn_sound", self.get_conf("WarningSoundFile"))
+            if self.get_conf("PlayFinishSound", dtype=bool):
+                SoundPlayer.warmup("finish_sound", self.get_conf("FinishSoundFile"))
+
         elif self.state == "PAUSED":
             self.target_timestamp = time.time() + self.paused_time
+            # 注意：這裡不重置 triggered 變數，延續之前的狀態
+
+        
         self.state = "RUNNING"
-        self.warning_triggered = False
-        self.finish_triggered = False
-        self.update_display_color()
         self.update_state_icon()
+        self.update_timer()
 
     def pause_timer(self):
         if self.state == "RUNNING":
@@ -2048,6 +2134,10 @@ class AdvancedTimer:
         SoundPlayer.stop() 
         self.warning_triggered = False
         self.finish_triggered = False
+        
+        # [新增] 重置「喚醒旗標」
+        self.warning_warmed_up = False
+        self.timeout_warmed_up = False
         
         if self.custom_duration is not None:
             self.duration = self.custom_duration
@@ -2076,34 +2166,59 @@ class AdvancedTimer:
         self.hint_label.config(text=icon)
 
     def update_timer(self):
-        if self.state == "RUNNING":
-            now = time.time()
-            diff = self.target_timestamp - now
-            if diff > 0:
-                mins, secs = divmod(int(diff) + 1, 60)
-                self.label.config(text=f"{mins:02d}:{secs:02d}")
-                ahead = self.get_conf("Ahead", dtype=int)
-                if diff <= ahead and not self.warning_triggered:
-                    self.warning_triggered = True
-                    color = self.get_conf("AheadColor")
-                    if not color or color == "0": color = "FCD34D"
-                    self.label.config(fg="#" + color.replace("#", ""))
-                    if self.get_conf("PlayWarningSound", dtype=bool):
-                        SoundPlayer.play(self.get_conf("WarningSoundFile"))
-            else:
-                if not self.finish_triggered:
-                    self.finish_triggered = True
-                    color = self.get_conf("timeoutColor")
-                    if not color or color == "0": color = "EF4444"
-                    self.label.config(fg="#" + color.replace("#", ""))
-                    if self.get_conf("PlayFinishSound", dtype=bool):
-                        SoundPlayer.play(self.get_conf("FinishSoundFile"))
-                    keys = self.get_conf("sendOnTimeout")
-                    if keys and keys != "0": self.send_keys_action(keys)
-                abs_diff = abs(int(diff))
-                mins, secs = divmod(abs_diff, 60)
-                self.label.config(text=f"{mins:02d}:{secs:02d}")
-        self.root.after(100, self.update_timer)
+        # 1. 殭屍迴圈防護：如果不是執行中，立刻停止迴圈
+        if self.state != "RUNNING": return
+
+        now = time.time()
+        diff = self.target_timestamp - now
+        
+        if diff > 0:
+            mins, secs = divmod(int(diff) + 1, 60)
+            self.label.config(text=f"{mins:02d}:{secs:02d}")
+            
+            ahead = self.get_conf("Ahead", dtype=int)
+            
+            # --- [新增] A. 針對 Warning 的喚醒機制 ---
+            # 如果時間剩下 (Warning時間 + 2秒)，且還沒喚醒過，就偷偷喚醒
+            if diff <= (ahead + 2.0) and not self.warning_warmed_up:
+                self.warning_warmed_up = True
+                if self.get_conf("PlayWarningSound", dtype=bool):
+                    SoundPlayer.warmup("warn_sound", self.get_conf("WarningSoundFile"))
+            
+            # --- [新增] B. 針對 Timeout 的喚醒機制 ---
+            # 如果時間剩下 2 秒，且還沒喚醒過，就偷偷喚醒
+            if diff <= 2.0 and not self.timeout_warmed_up:
+                self.timeout_warmed_up = True
+                if self.get_conf("PlayFinishSound", dtype=bool):
+                    SoundPlayer.warmup("finish_sound", self.get_conf("FinishSoundFile"))
+            # ----------------------------------------
+            
+            # [原有的 Warning 觸發邏輯] 提早 0.1 秒觸發以抵銷人耳延遲
+            if diff <= (ahead + 0.1) and not self.warning_triggered:
+                self.warning_triggered = True
+                color = self.get_conf("AheadColor")
+                if not color or color == "0": color = "FCD34D"
+                self.label.config(fg="#" + color.replace("#", ""))
+                if self.get_conf("PlayWarningSound", dtype=bool):
+                    SoundPlayer.play_alias("warn_sound", self.get_conf("WarningSoundFile"))
+        else:
+            # [原有的 Timeout 觸發邏輯]
+            if not self.finish_triggered:
+                self.finish_triggered = True
+                color = self.get_conf("timeoutColor")
+                if not color or color == "0": color = "EF4444"
+                self.label.config(fg="#" + color.replace("#", ""))
+                if self.get_conf("PlayFinishSound", dtype=bool):
+                    SoundPlayer.play_alias("finish_sound", self.get_conf("FinishSoundFile"))
+                keys = self.get_conf("sendOnTimeout")
+                if keys and keys != "0": self.send_keys_action(keys)
+            
+            abs_diff = abs(int(diff))
+            mins, secs = divmod(abs_diff, 60)
+            self.label.config(text=f"{mins:02d}:{secs:02d}")
+            
+        # 30ms 極速刷新
+        self.root.after(30, self.update_timer)
 
     def update_display_color(self, force_normal=False):
         color = self.current_fg if hasattr(self, 'current_fg') else "#E0E0E0"
