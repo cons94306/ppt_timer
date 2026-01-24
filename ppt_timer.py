@@ -68,6 +68,7 @@ finishsoundfile =
 language = zh_TW
 thememode = system
 showtaskbaricon = 0
+showtooltip = 1
 
 
 [shortcuts]
@@ -129,9 +130,10 @@ lbl_margin = 邊緣距離
 lbl_fontsize = 字體大小
 lbl_fontface = 字體名稱
 lbl_fontweight = 字體粗細
-lbl_theme_mode = 設定視窗主題 (全域)
+lbl_theme_mode = 設定視窗主題
 lbl_show_indicator = 顯示狀態指示燈 (►/∥/■)
 lbl_show_taskbar = 在工作列顯示圖示
+lbl_show_tooltip = 滑鼠懸停顯示快捷鍵
 lbl_color_settings = --- 計時器顏色設定 ---
 lbl_bg_color = 背景顏色
 lbl_text_color = 文字顏色
@@ -211,9 +213,10 @@ lbl_margin = Margin
 lbl_fontsize = Font Size
 lbl_fontface = Font Family
 lbl_fontweight = Font Weight
-lbl_theme_mode = Editor Theme (Global)
+lbl_theme_mode = Editor Theme
 lbl_show_indicator = Show Status Indicator (►/∥/■)
 lbl_show_taskbar = Show Icon in Taskbar
+lbl_show_tooltip = Show Hotkey Hints on Hover
 lbl_color_settings = --- Timer Colors ---
 lbl_bg_color = Background
 lbl_text_color = Text Color
@@ -293,9 +296,10 @@ lbl_margin = 边缘距离
 lbl_fontsize = 字体大小
 lbl_fontface = 字体名称
 lbl_fontweight = 字体粗细
-lbl_theme_mode = 设置窗口主题 (全局)
+lbl_theme_mode = 设置窗口主题
 lbl_show_indicator = 显示状态指示灯 (►/∥/■)
 lbl_show_taskbar = 在任务栏显示图标
+lbl_show_tooltip = 鼠标悬停显示快捷键
 lbl_color_settings = --- 计时器颜色设置 ---
 lbl_bg_color = 背景颜色
 lbl_text_color = 文字颜色
@@ -375,9 +379,10 @@ lbl_margin = マージン
 lbl_fontsize = フォントサイズ
 lbl_fontface = フォント名
 lbl_fontweight = 太さ
-lbl_theme_mode = 設定画面のテーマ (全体)
+lbl_theme_mode = 設定画面のテーマ
 lbl_show_indicator = ステータスアイコンを表示 (►/∥/■)
 lbl_show_taskbar = タスクバーにアイコンを表示
+lbl_show_tooltip = マウスホバー時にショートカットを表示
 lbl_color_settings = --- タイマーの配色 ---
 lbl_bg_color = 背景色
 lbl_text_color = 文字色
@@ -457,9 +462,10 @@ lbl_margin = 여백
 lbl_fontsize = 글꼴 크기
 lbl_fontface = 글꼴 이름
 lbl_fontweight = 글꼴 굵기
-lbl_theme_mode = 설정창 테마 (전역)
+lbl_theme_mode = 설정창 테마
 lbl_show_indicator = 상태 아이콘 표시 (►/∥/■)
 lbl_show_taskbar = 작업 표시줄에 아이콘 표시
+lbl_show_tooltip = 마우스 오버 시 단축키 표시
 lbl_color_settings = --- 타이머 색상 설정 ---
 lbl_bg_color = 배경 색상
 lbl_text_color = 텍스트 색상
@@ -539,9 +545,10 @@ lbl_margin = Отступ
 lbl_fontsize = Размер шрифта
 lbl_fontface = Шрифт
 lbl_fontweight = Жирность
-lbl_theme_mode = Тема окна (Глобальная)
+lbl_theme_mode = Тема окна
 lbl_show_indicator = Индикатор статуса (►/∥/■)
 lbl_show_taskbar = Показать значок на панели задач
+lbl_show_tooltip = Показать горячие клавиши при наведении
 lbl_color_settings = --- Цвета таймера ---
 lbl_bg_color = Фон
 lbl_text_color = Текст
@@ -621,9 +628,10 @@ lbl_margin = Margen
 lbl_fontsize = Tamaño fuente
 lbl_fontface = Fuente
 lbl_fontweight = Grosor
-lbl_theme_mode = Tema del Editor (Global)
+lbl_theme_mode = Tema del Editor
 lbl_show_indicator = Indicador de estado (►/∥/■)
 lbl_show_taskbar = Mostrar icono en la barra de tareas
+lbl_show_tooltip = Mostrar atajos al pasar el ratón
 lbl_color_settings = --- Colores del Temporizador ---
 lbl_bg_color = Fondo
 lbl_text_color = Color Texto
@@ -703,9 +711,10 @@ lbl_margin = Marge
 lbl_fontsize = Taille police
 lbl_fontface = Police
 lbl_fontweight = Graisse
-lbl_theme_mode = Thème (Éditeur Global)
+lbl_theme_mode = Thème
 lbl_show_indicator = Indicateur d'état (►/∥/■)
 lbl_show_taskbar = Afficher l'icône dans la barre des tâches
+lbl_show_tooltip = Afficher les raccourcis au survol
 lbl_color_settings = --- Couleurs du Timer ---
 lbl_bg_color = Arrière-plan
 lbl_text_color = Couleur du texte
@@ -785,9 +794,10 @@ lbl_margin = Randabstand
 lbl_fontsize = Schriftgröße
 lbl_fontface = Schriftart
 lbl_fontweight = Schriftstärke
-lbl_theme_mode = Editor-Design (Global)
+lbl_theme_mode = Editor-Design
 lbl_show_indicator = Statusanzeige (►/∥/■)
 lbl_show_taskbar = Symbol in Taskleiste anzeigen
+lbl_show_tooltip = Hotkeys beim Überfahren anzeigen
 lbl_color_settings = --- Timer-Farben ---
 lbl_bg_color = Hintergrund
 lbl_text_color = Textfarbe
@@ -862,7 +872,7 @@ class LanguageHelper:
 class SoundPlayer:
     loaded_files = {}
 
-    @classmethod  # <--- 務必確認這一行有加上！
+    @classmethod
     def load_resource(cls, filepath, alias):
         """ 預先載入音效檔案 (快取機制) """
         if not filepath: return
@@ -1068,7 +1078,6 @@ class SettingsEditor(tk.Toplevel):
         self.load_section_to_ui(self.editing_section)
 
     def determine_theme_colors(self):
-        # [Modified] 強制從 General 讀取全域設定
         mode = self.config.get("General", "thememode", fallback="system")
             
         self.is_dark = False
@@ -1142,12 +1151,11 @@ class SettingsEditor(tk.Toplevel):
 
         btn_opts = {"bg": self.colors["btn_bg"], "fg": self.colors["btn_fg"], "activebackground": self.colors["highlight"], "activeforeground": self.colors["btn_fg"], "relief": "flat"}
 
-        # [Fix] 按鈕寬度統一設為 6
-        tk.Button(top_frame, text=self.lang.get("btn_add"), command=self.add_profile, width=6, **btn_opts).pack(side='left', padx=1)
-        tk.Button(top_frame, text=self.lang.get("btn_del"), command=self.delete_profile, width=6, **btn_opts).pack(side='left', padx=1)
+        tk.Button(top_frame, text=self.lang.get("btn_add"), command=self.add_profile, width=7, **btn_opts).pack(side='left', padx=1)
+        tk.Button(top_frame, text=self.lang.get("btn_del"), command=self.delete_profile, width=7, **btn_opts).pack(side='left', padx=1)
         
-        tk.Button(top_frame, text=self.lang.get("btn_up"), command=self.move_profile_up, width=6, **btn_opts).pack(side='left', padx=1)
-        tk.Button(top_frame, text=self.lang.get("btn_down"), command=self.move_profile_down, width=6, **btn_opts).pack(side='left', padx=1)
+        tk.Button(top_frame, text=self.lang.get("btn_up"), command=self.move_profile_up, width=7, **btn_opts).pack(side='left', padx=1)
+        tk.Button(top_frame, text=self.lang.get("btn_down"), command=self.move_profile_down, width=7, **btn_opts).pack(side='left', padx=1)
 
         notebook = ttk.Notebook(self)
         notebook.pack(fill='both', expand=True, padx=10, pady=10)
@@ -1330,6 +1338,11 @@ class SettingsEditor(tk.Toplevel):
                 var.set(val)
                 continue
 
+            if key == "showtooltip":
+                val = self.config.get("General", "showtooltip", fallback="1")
+                var.set(val)
+                continue
+
             val = self.config.get(section, key, fallback=None)
             if val is None and section != "Main":
                 val = self.config.get("Main", key, fallback="")
@@ -1353,13 +1366,16 @@ class SettingsEditor(tk.Toplevel):
                 self.config.set("General", "language", code)
             elif key == "thememode":
                 code = self.theme_map.get(val, "system")
-                # [Modified] 寫入全域設定，不寫入 Profile
                 if not self.config.has_section("General"): self.config.add_section("General")
                 self.config.set("General", "thememode", code)
             elif key == "showtaskbaricon":
                 if not self.config.has_section("General"): 
                     self.config.add_section("General")
                 self.config.set("General", "showtaskbaricon", val)
+            elif key == "showtooltip":
+                if not self.config.has_section("General"): 
+                    self.config.add_section("General")
+                self.config.set("General", "showtooltip", val)
             else:
                 self.config.set(section, key, val)
 
@@ -1506,7 +1522,6 @@ class SettingsEditor(tk.Toplevel):
         notebook.add(frame, text=self.lang.get("tab_interface"))
         
         langs = self.lang.get_available_languages()
-        # [NEW] 排序語言代碼 (a->z)
         langs.sort(key=lambda x: x[0])
         
         lang_names = [name for code, name in langs]
@@ -1516,8 +1531,10 @@ class SettingsEditor(tk.Toplevel):
         self.add_combo(frame, 1, self.lang.get("lbl_theme_mode"), "thememode", theme_names)
         
         self.add_checkbox(frame, 2, self.lang.get("lbl_show_taskbar"), "showtaskbaricon")
+
+        self.add_checkbox(frame, 3, self.lang.get("lbl_show_tooltip"), "showtooltip")
         
-        tk.Label(frame, text=self.lang.get("lbl_lang_note"), fg="gray", bg=self.colors["bg"]).grid(row=3, column=0, columnspan=2, padx=10, pady=20)
+        tk.Label(frame, text=self.lang.get("lbl_lang_note"), fg="gray", bg=self.colors["bg"]).grid(row=4, column=0, columnspan=2, padx=10, pady=20)
 
     def create_about_tab(self, notebook):
         frame = tk.Frame(notebook, bg=self.colors["bg"])
@@ -1734,7 +1751,6 @@ class AdvancedTimer:
             radio=True
         ))
         
-        # [Fix] 系統托盤選單也需要強制排序
         profiles = [s for s in self.config.sections() if s.startswith("Profile_")]
         profiles.sort(key=lambda x: int(x.split('_')[1]) if '_' in x else 0)
         
@@ -1759,7 +1775,7 @@ class AdvancedTimer:
             Item(self.lang_helper.get('settings'), make_simple_action(self.open_settings)),
             Item(self.lang_helper.get('reload'), make_simple_action(self.reload_config)),
             Menu.SEPARATOR,
-            Item(self.lang_helper.get('quit'), make_simple_action(self.quit_app))
+            Item(f"{self.lang_helper.get('quit')} ({quit_key})", make_simple_action(self.quit_app))
         ]
 
         return Menu(*menu_items)
@@ -1778,7 +1794,6 @@ class AdvancedTimer:
                 style = style & ~WS_EX_APPWINDOW
             
             ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style)
-            # [Fixed] 強制觸發狀態更新
             self.root.withdraw()
             self.root.deiconify()
         except:
@@ -1913,7 +1928,6 @@ class AdvancedTimer:
             return "light"
     
     def get_theme_colors(self):
-        # [Modified] 強制從 General 讀取全域設定
         mode = self.get_conf("thememode", section="General")
         if not mode: mode = "system"
         is_dark = False
@@ -1960,7 +1974,7 @@ class AdvancedTimer:
         except tk.TclError:
             pass
 
-        # [NEW] 預先載入音效，避免計時卡頓
+        # 預先載入音效，避免計時卡頓
         if self.get_conf("PlayWarningSound", dtype=bool):
             SoundPlayer.load_resource(self.get_conf("WarningSoundFile"), "warn_sound")
         if self.get_conf("PlayFinishSound", dtype=bool):
@@ -2070,6 +2084,10 @@ class AdvancedTimer:
             w.bind("<Leave>", self.hide_tooltip)
 
     def show_tooltip(self, event):
+        show = self.config.get("General", "showtooltip", fallback="1")
+        if show != "1":
+            return
+        
         s = "shortcuts"
         start = self.config.get(s, "startKey", fallback="F9").upper()
         pause = self.config.get(s, "pauseKey", fallback="F11").upper()
@@ -2113,12 +2131,10 @@ class AdvancedTimer:
             self.start_timestamp = time.time()
             self.target_timestamp = self.start_timestamp + self.duration
             
-            # [修正重點] 旗標重置只在「全新開始 (STOPPED)」時執行
-            # 這樣「暫停後繼續」時，會保留原本的 True/False 狀態，就不會重複響鈴
             self.warning_triggered = False
             self.finish_triggered = False
             
-            # 暖身音效
+            # 預先載入音效
             if self.get_conf("PlayWarningSound", dtype=bool):
                 SoundPlayer.warmup("warn_sound", self.get_conf("WarningSoundFile"))
             if self.get_conf("PlayFinishSound", dtype=bool):
@@ -2126,7 +2142,6 @@ class AdvancedTimer:
 
         elif self.state == "PAUSED":
             self.target_timestamp = time.time() + self.paused_time
-            # 注意：這裡不重置 triggered 變數，延續之前的狀態
 
         
         self.state = "RUNNING"
@@ -2145,7 +2160,6 @@ class AdvancedTimer:
         self.warning_triggered = False
         self.finish_triggered = False
         
-        # [新增] 重置「喚醒旗標」
         self.warning_warmed_up = False
         self.timeout_warmed_up = False
         
@@ -2176,7 +2190,6 @@ class AdvancedTimer:
         self.hint_label.config(text=icon)
 
     def update_timer(self):
-        # 1. 殭屍迴圈防護：如果不是執行中，立刻停止迴圈
         if self.state != "RUNNING": return
 
         now = time.time()
@@ -2188,22 +2201,21 @@ class AdvancedTimer:
             
             ahead = self.get_conf("Ahead", dtype=int)
             
-            # --- [新增] A. 針對 Warning 的喚醒機制 ---
+            # --- Warning 的喚醒機制 ---
             # 如果時間剩下 (Warning時間 + 2秒)，且還沒喚醒過，就偷偷喚醒
             if diff <= (ahead + 2.0) and not self.warning_warmed_up:
                 self.warning_warmed_up = True
                 if self.get_conf("PlayWarningSound", dtype=bool):
                     SoundPlayer.warmup("warn_sound", self.get_conf("WarningSoundFile"))
             
-            # --- [新增] B. 針對 Timeout 的喚醒機制 ---
+            # --- Timeout 的喚醒機制 ---
             # 如果時間剩下 2 秒，且還沒喚醒過，就偷偷喚醒
             if diff <= 2.0 and not self.timeout_warmed_up:
                 self.timeout_warmed_up = True
                 if self.get_conf("PlayFinishSound", dtype=bool):
                     SoundPlayer.warmup("finish_sound", self.get_conf("FinishSoundFile"))
-            # ----------------------------------------
             
-            # [原有的 Warning 觸發邏輯] 提早 0.1 秒觸發以抵銷人耳延遲
+            #  提早 0.1 秒觸發以抵銷人耳延遲
             if diff <= (ahead + 0.1) and not self.warning_triggered:
                 self.warning_triggered = True
                 color = self.get_conf("AheadColor")
@@ -2212,7 +2224,6 @@ class AdvancedTimer:
                 if self.get_conf("PlayWarningSound", dtype=bool):
                     SoundPlayer.play_alias("warn_sound", self.get_conf("WarningSoundFile"))
         else:
-            # [原有的 Timeout 觸發邏輯]
             if not self.finish_triggered:
                 self.finish_triggered = True
                 color = self.get_conf("timeoutColor")
@@ -2227,7 +2238,6 @@ class AdvancedTimer:
             mins, secs = divmod(abs_diff, 60)
             self.label.config(text=f"{mins:02d}:{secs:02d}")
             
-        # 30ms 極速刷新
         self.root.after(30, self.update_timer)
 
     def update_display_color(self, force_normal=False):
@@ -2370,7 +2380,6 @@ class AdvancedTimer:
             command=lambda: self.change_profile("Main")
         )
 
-        # [Fix] 右鍵選單也需要強制排序
         profiles = [s for s in self.config.sections() if s.startswith("Profile_")]
         profiles.sort(key=lambda x: int(x.split('_')[1]) if '_' in x else 0)
 
