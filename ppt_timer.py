@@ -242,6 +242,7 @@ ct_sec = Seconds
 ct_ok = OK
 ct_cancel = Cancel
 about_desc = A lightweight, always-on-top timer designed for presenters and streamers.
+btn_add = ➕ Add
 btn_del = ➖ Del
 btn_up = ↑ Up
 btn_down = ↓ Down
