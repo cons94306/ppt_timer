@@ -61,13 +61,14 @@ playfinishsound = 0
 stopresetstimer = 0
 sendontimeout = 0
 showstatusindicator = 1
-showtaskbaricon = 0
 warningsoundfile = 
 finishsoundfile = 
 
 [General]
 language = zh_TW
 thememode = system
+showtaskbaricon = 0
+
 
 [shortcuts]
 startkey = F9
@@ -1318,10 +1319,14 @@ class SettingsEditor(tk.Toplevel):
                 continue
 
             if key == "thememode":
-                # [Modified] 強制讀取全域設定
                 val = self.config.get("General", "thememode", fallback="system")
                 display = next((k for k, v in self.theme_map.items() if v == val), self.lang.get("theme_system"))
                 var.set(display)
+                continue
+
+            if key == "showtaskbaricon":
+                val = self.config.get("General", "showtaskbaricon", fallback="0")
+                var.set(val)
                 continue
 
             val = self.config.get(section, key, fallback=None)
@@ -1350,6 +1355,10 @@ class SettingsEditor(tk.Toplevel):
                 # [Modified] 寫入全域設定，不寫入 Profile
                 if not self.config.has_section("General"): self.config.add_section("General")
                 self.config.set("General", "thememode", code)
+            elif key == "showtaskbaricon":
+                if not self.config.has_section("General"): 
+                    self.config.add_section("General")
+                self.config.set("General", "showtaskbaricon", val)
             else:
                 self.config.set(section, key, val)
 
@@ -1756,7 +1765,7 @@ class AdvancedTimer:
 
     def apply_taskbar_icon_state(self):
         try:
-            show_icon = self.get_conf("showtaskbaricon", dtype=bool)
+            show_icon = self.get_conf("showtaskbaricon", section="General", dtype=bool)
             hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
             style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
             
